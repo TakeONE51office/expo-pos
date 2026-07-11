@@ -1212,12 +1212,14 @@ function ensureGbk(){
     return gbkMap.size > 20000;
   }catch(e){ gbkMap=null; return false; }
 }
+const GBK_ALT = {'¥':'￥'};   // GBK 里没有半角日元符，打印时换成全角（宽度2，与 bw 计算一致）
 function gbkEncode(str){
   const out=[];
   for(const ch of str){
     const cp = ch.codePointAt(0);
     if(cp<0x80){ out.push(cp); continue; }
-    const g = gbkMap.get(ch);
+    let g = gbkMap.get(ch);
+    if(!g && GBK_ALT[ch]) g = gbkMap.get(GBK_ALT[ch]);
     if(g){ out.push(g>>8, g&0xFF); } else { out.push(0x3F); } // '?'
   }
   return out;
