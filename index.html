@@ -1,0 +1,1467 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>展会收银台</title>
+<style>
+:root{
+  --bg:#f4f5f7; --card:#ffffff; --ink:#1a1d24; --sub:#6b7280;
+  --brand:#2563eb; --brand-dk:#1d4ed8;
+  --ok:#16a34a; --warn:#d97706; --err:#dc2626;
+  --line:#e5e7eb; --radius:14px;
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-t:env(safe-area-inset-top,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:-apple-system,"PingFang SC","Hiragino Sans","Microsoft YaHei",sans-serif;
+  background:var(--bg); color:var(--ink); font-size:16px;
+  touch-action:manipulation; overscroll-behavior:none;
+}
+button{font-family:inherit;border:none;background:none;cursor:pointer;font-size:inherit;color:inherit}
+input,textarea,select{font-family:inherit;font-size:16px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%;background:#fff;color:var(--ink)}
+input:focus,textarea:focus,select:focus{outline:2px solid var(--brand);border-color:transparent}
+
+/* ---------- 布局 ---------- */
+#app{display:flex;flex-direction:column;height:100dvh}
+header{
+  padding:calc(10px + var(--safe-t)) 16px 10px;
+  background:var(--card); border-bottom:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  position:sticky;top:0;z-index:20;
+}
+header h1{font-size:18px;font-weight:700;flex:1}
+#langBtn{
+  font-size:12px;padding:5px 10px;border-radius:999px;font-weight:700;
+  background:#eef2ff;color:var(--brand);white-space:nowrap;
+}
+#printerPill{
+  font-size:12px;padding:5px 10px;border-radius:999px;font-weight:600;
+  background:#f1f5f9;color:var(--sub);border:1px solid var(--line);
+  max-width:38vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+#printerPill.on{background:#dcfce7;color:#15803d;border-color:#bbf7d0}
+main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.view{display:none;padding:14px 14px calc(90px + var(--safe-b))}
+.view.active{display:block}
+
+nav{
+  position:fixed;bottom:0;left:0;right:0;z-index:30;
+  background:var(--card);border-top:1px solid var(--line);
+  display:flex;padding-bottom:var(--safe-b);
+}
+nav button{
+  flex:1;padding:9px 0 7px;display:flex;flex-direction:column;align-items:center;gap:2px;
+  font-size:11px;color:var(--sub);font-weight:600;
+}
+nav button .ic{font-size:21px;line-height:1}
+nav button.active{color:var(--brand)}
+nav button{position:relative}
+nav button .dot{
+  position:absolute;top:4px;right:calc(50% - 20px);width:8px;height:8px;border-radius:50%;
+  background:var(--err);display:none;
+}
+nav button .dot.show{display:block}
+
+/* ---------- 通用组件 ---------- */
+.card{background:var(--card);border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:12px 16px;border-radius:12px;font-weight:600;font-size:15px;
+  background:var(--brand);color:#fff;transition:opacity .15s;
+}
+.btn:active{opacity:.75}
+.btn.ghost{background:#eef2ff;color:var(--brand)}
+.btn.gray{background:#f1f5f9;color:#475569}
+.btn.red{background:#fee2e2;color:var(--err)}
+.btn.green{background:var(--ok);color:#fff}
+.btn.sm{padding:8px 12px;font-size:13px;border-radius:10px}
+.btn.block{display:flex;width:100%}
+.btn[disabled]{opacity:.4;pointer-events:none}
+.sec-title{font-size:14px;color:var(--sub);font-weight:700;margin:16px 2px 8px}
+.hint{font-size:12.5px;color:var(--sub);line-height:1.6}
+.row{display:flex;gap:10px}
+.row>*{flex:1}
+
+/* ---------- 提示条 ---------- */
+#lowBanner{
+  display:none;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;
+  border-radius:var(--radius);padding:11px 13px;margin-bottom:12px;
+  font-size:13.5px;font-weight:600;line-height:1.6;
+}
+#lowBanner.show{display:block}
+#lowBanner .t{display:flex;align-items:center;gap:6px;margin-bottom:2px}
+
+/* ---------- 收银商品网格 ---------- */
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.pcard{
+  background:var(--card);border-radius:var(--radius);padding:12px;position:relative;
+  border:2px solid transparent;box-shadow:0 1px 2px rgba(0,0,0,.04);
+  text-align:left;transition:transform .08s;user-select:none;-webkit-user-select:none;
+  display:flex;flex-direction:column;gap:6px;min-height:96px;
+}
+.pcard:active{transform:scale(.96)}
+.pcard.incart{border-color:var(--brand)}
+.pcard.out{opacity:.55}
+.pcard .nm{font-weight:700;font-size:14.5px;line-height:1.35;word-break:break-all}
+.pcard .pr{font-size:16px;font-weight:800;color:var(--brand);margin-top:auto;font-variant-numeric:tabular-nums}
+.pcard .stk{font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:999px;align-self:flex-start}
+.stk.g{background:#dcfce7;color:#15803d}
+.stk.y{background:#fef3c7;color:#b45309}
+.stk.r{background:#fee2e2;color:#b91c1c}
+.pcard .qty{
+  position:absolute;top:-7px;right:-7px;min-width:24px;height:24px;border-radius:12px;
+  background:var(--brand);color:#fff;font-size:13px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;padding:0 7px;
+  box-shadow:0 2px 6px rgba(37,99,235,.45);
+}
+.pcard .thumb{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:9px;background:#f1f5f9;pointer-events:none}
+.pcard .minus{
+  position:absolute;bottom:8px;right:8px;width:36px;height:36px;border-radius:50%;
+  background:#fee2e2;color:var(--err);font-size:22px;font-weight:800;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 8px rgba(0,0,0,.18);
+}
+.pcard .minus:active{transform:scale(.88)}
+.pcard.incart .pr{padding-right:42px}
+.icard .ithumb{width:46px;height:46px;border-radius:9px;object-fit:cover;background:#f1f5f9;flex:none}
+
+/* ---------- 购物车栏/面板 ---------- */
+#cartBar{
+  position:fixed;left:12px;right:12px;bottom:calc(62px + var(--safe-b));z-index:25;
+  background:var(--ink);color:#fff;border-radius:16px;padding:13px 16px;
+  display:none;align-items:center;justify-content:space-between;
+  box-shadow:0 8px 24px rgba(0,0,0,.25);
+}
+#cartBar.show{display:flex}
+#cartBar .sum{font-size:15px;font-weight:600}
+#cartBar .sum b{font-size:19px;margin-left:4px}
+#cartBar .go{background:var(--brand);padding:9px 20px;border-radius:11px;font-weight:700;color:#fff}
+
+.sheet-mask{
+  position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:40;display:none;
+}
+.sheet-mask.show{display:block}
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--card);
+  border-radius:20px 20px 0 0;padding:18px 16px calc(16px + var(--safe-b));
+  transform:translateY(105%);transition:transform .22s ease;max-height:88dvh;
+  display:flex;flex-direction:column;
+}
+.sheet.show{transform:translateY(0)}
+.sheet h3{font-size:17px;margin-bottom:12px}
+.sheet .body{overflow-y:auto;flex:1}
+.citem{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}
+.citem .inf{flex:1;min-width:0}
+.citem .inf .n{font-weight:600;font-size:14.5px}
+.citem .inf .p{font-size:12.5px;color:var(--sub);margin-top:2px}
+.citem .stp{display:flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.citem .stp button{width:38px;height:36px;font-size:19px;font-weight:700;color:var(--brand);background:#f8fafc}
+.citem .stp span{width:36px;text-align:center;font-weight:700}
+.citem .sub{width:72px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.paym{display:flex;gap:8px;margin:12px 0 0}
+.pm{
+  flex:1;padding:11px 0;border-radius:11px;font-weight:700;font-size:14.5px;
+  background:#f1f5f9;color:#475569;border:2px solid transparent;
+}
+.pm.sel{background:#eef2ff;color:var(--brand);border-color:var(--brand)}
+#cashRow{margin-top:10px;align-items:flex-end}
+.chg{
+  font-size:22px;font-weight:800;color:var(--ok);padding:6px 2px;
+  font-variant-numeric:tabular-nums;
+}
+.chg.neg{color:var(--err);font-size:16px}
+
+/* ---------- 订单 ---------- */
+.ocard{background:var(--card);border-radius:var(--radius);padding:13px 14px;margin-bottom:10px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.ocard.cancelled{opacity:.62}
+.ocard .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.ocard .no{font-weight:800;font-size:15px}
+.ocard .chip{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px}
+.chip.done{background:#dcfce7;color:#15803d}
+.chip.cxl{background:#f1f5f9;color:#64748b}
+.ocard .items{font-size:13.5px;color:var(--sub);line-height:1.7;margin-bottom:8px}
+.ocard .bot{display:flex;justify-content:space-between;align-items:center}
+.ocard .amt{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}
+.ocard .ops{display:flex;gap:8px}
+.ocard .ret-note{font-size:12px;color:var(--ok);font-weight:600;margin-top:4px}
+
+/* ---------- 库存 ---------- */
+.icard{background:var(--card);border-radius:var(--radius);padding:13px 14px;margin-bottom:10px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.icard .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.icard .nm{font-weight:700;font-size:15px}
+.icard .meta{font-size:12.5px;color:var(--sub);margin-top:2px}
+.bar{height:8px;border-radius:4px;background:#eef1f4;margin:10px 0 6px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:4px;background:var(--ok);transition:width .3s}
+.bar i.y{background:var(--warn)} .bar i.r{background:var(--err)}
+.icard .foot{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:var(--sub)}
+.icard .warn-tag{color:var(--err);font-weight:700}
+
+/* ---------- 统计 ---------- */
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px}
+.stat{background:var(--card);border-radius:var(--radius);padding:13px 8px;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.stat b{font-size:20px;display:block;font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--sub)}
+table.rank{width:100%;border-collapse:collapse;font-size:13.5px}
+table.rank td,table.rank th{padding:8px 4px;border-bottom:1px solid var(--line);text-align:left}
+table.rank td:last-child,table.rank th:last-child{text-align:right}
+table.rank th{color:var(--sub);font-size:12px;font-weight:600}
+
+/* ---------- 弹窗 ---------- */
+#modalMask{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:60;display:none;align-items:center;justify-content:center;padding:24px}
+#modalMask.show{display:flex}
+#modalBox{background:var(--card);border-radius:18px;width:100%;max-width:400px;max-height:80dvh;display:flex;flex-direction:column;overflow:hidden}
+#modalBox .hd{padding:17px 18px 0;font-size:17px;font-weight:700}
+#modalBox .bd{padding:12px 18px;overflow-y:auto;font-size:14.5px;line-height:1.7}
+#modalBox .ft{display:flex;gap:10px;padding:6px 18px 18px}
+#modalBox .ft .btn{flex:1}
+.fld{margin-bottom:12px}
+.fld label{display:block;font-size:13px;color:var(--sub);font-weight:600;margin-bottom:5px}
+.ret-list{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 12px;margin-top:8px;font-size:14px;line-height:1.9}
+
+/* ---------- Toast ---------- */
+#toasts{position:fixed;top:calc(14px + var(--safe-t));left:14px;right:14px;z-index:90;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{
+  border-radius:13px;padding:13px 15px;font-size:14.5px;font-weight:600;line-height:1.55;
+  color:#fff;box-shadow:0 6px 20px rgba(0,0,0,.22);
+  animation:tin .25s ease;white-space:pre-line;
+}
+.toast.ok{background:#15803d}
+.toast.warn{background:#c2410c}
+.toast.err{background:#b91c1c}
+.toast.info{background:#334155}
+@keyframes tin{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:none}}
+.toast.big{font-size:16px;padding:16px}
+
+.empty{text-align:center;padding:48px 20px;color:var(--sub)}
+.empty .ic{font-size:44px;margin-bottom:10px}
+.empty p{font-size:14px;line-height:1.7;margin-bottom:16px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1 id="hTitle" data-i18n="title">展会收银台</h1>
+    <button id="langBtn" onclick="toggleLang()">🌐 日本語</button>
+    <button id="printerPill" onclick="switchTab('set');document.getElementById('printCard').scrollIntoView()">🖨 --</button>
+  </header>
+
+  <main>
+    <!-- ============ 收银 ============ -->
+    <div class="view active" id="v-pos">
+      <div id="lowBanner" onclick="switchTab('inv')"></div>
+      <div id="grid"></div>
+      <div id="posEmpty" class="empty" style="display:none">
+        <div class="ic">📦</div>
+        <p data-i18n="pos_empty">还没有商品。<br>先到「库存」页添加商品（支持批量导入，一分钟搞定）</p>
+        <button class="btn" onclick="switchTab('inv')" data-i18n="pos_empty_btn">去添加商品</button>
+      </div>
+    </div>
+
+    <!-- ============ 订单 ============ -->
+    <div class="view" id="v-ord">
+      <div id="ordList"></div>
+      <div id="ordEmpty" class="empty" style="display:none">
+        <div class="ic">🧾</div><p data-i18n="ord_empty">还没有订单</p>
+      </div>
+    </div>
+
+    <!-- ============ 库存 ============ -->
+    <div class="view" id="v-inv">
+      <div class="row" style="margin-bottom:12px">
+        <button class="btn" onclick="openEditProduct(null)" data-i18n="inv_add">＋ 添加商品</button>
+        <button class="btn ghost" onclick="openBatchImport()" data-i18n="inv_batch">📋 批量导入</button>
+        <button class="btn gray" onclick="refillAll()" data-i18n="inv_refill">补满全部</button>
+      </div>
+      <div id="invList"></div>
+    </div>
+
+    <!-- ============ 统计/设置 ============ -->
+    <div class="view" id="v-set">
+      <div class="sec-title" data-i18n="st_today">📊 今日统计</div>
+      <div class="stats">
+        <div class="stat"><b id="stRev">¥0</b><span data-i18n="st_rev">销售额</span></div>
+        <div class="stat"><b id="stCnt">0</b><span data-i18n="st_cnt">订单数</span></div>
+        <div class="stat"><b id="stQty">0</b><span data-i18n="st_qty">售出件数</span></div>
+      </div>
+      <div class="card" id="payBreak" style="font-size:14px;font-weight:600;display:none"></div>
+      <div class="card">
+        <table class="rank" id="rankTbl">
+          <thead><tr><th data-i18n="rk_p">商品</th><th data-i18n="rk_s">已售</th><th data-i18n="rk_l">余量</th><th data-i18n="rk_a">金额</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="sec-title" data-i18n="pr_title">🖨 小票打印机</div>
+      <div class="card" id="printCard">
+        <div class="row" style="margin-bottom:10px">
+          <button class="btn" id="btnConnect" onclick="connectPrinter()" data-i18n="pr_connect">连接蓝牙打印机</button>
+          <button class="btn ghost" onclick="testPrint()" data-i18n="pr_test">测试打印</button>
+        </div>
+        <div class="row" style="margin-bottom:10px">
+          <div class="fld" style="margin:0">
+            <label data-i18n="pr_paper">纸宽</label>
+            <select id="setPaper" onchange="saveSettings()">
+              <option value="80">80mm</option>
+              <option value="58">58mm</option>
+            </select>
+          </div>
+          <div class="fld" style="margin:0">
+            <label data-i18n="pr_mode">打印方式</label>
+            <select id="setPmode" onchange="saveSettings()">
+              <option value="text" data-i18n="pr_mode_t">文本（快）</option>
+              <option value="img" data-i18n="pr_mode_i">图片（兼容）</option>
+            </select>
+          </div>
+          <div class="fld" style="margin:0">
+            <label data-i18n="pr_auto">收款后自动打印</label>
+            <select id="setAuto" onchange="saveSettings()">
+              <option value="0" data-i18n="opt_off">关闭</option>
+              <option value="1" data-i18n="opt_on">开启</option>
+            </select>
+          </div>
+        </div>
+        <p class="hint" id="bleHint" data-i18n="pr_hint">iPhone 请用 App Store 的免费浏览器 <b>Bluefy</b> 打开本页面即可连接蓝牙打印；安卓用 Chrome 直接可用。小票乱码时请把打印方式切换为「图片」。</p>
+      </div>
+
+      <div class="sec-title" data-i18n="rc_title">🧾 小票内容</div>
+      <div class="card">
+        <div class="fld"><label data-i18n="rc_shop">摊位名称（小票抬头）</label><input id="setShop" onchange="saveSettings()"></div>
+        <div class="fld" style="margin:0"><label data-i18n="rc_foot">小票末尾附言</label><input id="setFoot" onchange="saveSettings()"></div>
+      </div>
+
+      <div class="sec-title" data-i18n="ex_title">📤 数据导出</div>
+      <div class="card">
+        <div class="row" style="margin-bottom:10px">
+          <button class="btn ghost" onclick="exportCSV('orders')" data-i18n="ex_orders">订单明细 CSV</button>
+          <button class="btn ghost" onclick="exportCSV('inv')" data-i18n="ex_inv">库存汇总 CSV</button>
+        </div>
+        <button class="btn gray block" onclick="copySummary()" data-i18n="ex_copy">复制文字版收摊汇总</button>
+      </div>
+
+      <div class="sec-title" data-i18n="dm_title">⚠️ 数据管理</div>
+      <div class="card">
+        <p class="hint" style="margin-bottom:10px" data-i18n="dm_hint">所有数据仅保存在本机浏览器中，请勿清除浏览器数据。新一场展会开始前可清空订单并补满库存。</p>
+        <div class="row">
+          <button class="btn red" onclick="clearOrders()" data-i18n="dm_clear">清空全部订单</button>
+          <button class="btn red" onclick="factoryReset()" data-i18n="dm_reset">恢复出厂</button>
+        </div>
+      </div>
+      <p class="hint" style="text-align:center;margin-top:14px" data-i18n="ver">展会收银台 v1.2 · 离线可用</p>
+    </div>
+  </main>
+
+  <!-- 购物车悬浮栏 -->
+  <div id="cartBar">
+    <div class="sum"><span id="cbCnt"></span> · <span data-i18n="total">合计</span><b id="cbAmt"></b></div>
+    <button class="go" onclick="openCart()" data-i18n="settle">结算</button>
+  </div>
+
+  <!-- 底部导航 -->
+  <nav>
+    <button data-tab="pos" class="active" onclick="switchTab('pos')"><span class="ic">🛒</span><span data-i18n="nav_pos">收银</span></button>
+    <button data-tab="ord" onclick="switchTab('ord')"><span class="ic">🧾</span><span data-i18n="nav_ord">订单</span></button>
+    <button data-tab="inv" onclick="switchTab('inv')"><span class="ic">📦</span><span data-i18n="nav_inv">库存</span><span class="dot" id="invDot"></span></button>
+    <button data-tab="set" onclick="switchTab('set')"><span class="ic">📊</span><span data-i18n="nav_set">统计</span></button>
+  </nav>
+</div>
+
+<!-- 购物车面板 -->
+<div class="sheet-mask" id="cartMask" onclick="closeCart()"></div>
+<div class="sheet" id="cartSheet">
+  <h3 data-i18n="cart_title">本单商品</h3>
+  <div class="body" id="cartBody"></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 2px 0">
+    <span style="font-size:15px;color:var(--sub)" data-i18n="total">合计</span>
+    <b style="font-size:24px" id="cartTotal">¥0</b>
+  </div>
+  <div class="paym">
+    <button class="pm" data-pm="cash" onclick="setPay('cash')" data-i18n="pm_cash">现金</button>
+    <button class="pm" data-pm="pp" onclick="setPay('pp')">PayPay</button>
+    <button class="pm" data-pm="zfb" onclick="setPay('zfb')" data-i18n="pm_zfb">支付宝</button>
+  </div>
+  <div class="row" id="cashRow" style="display:none">
+    <div class="fld" style="margin:0"><label data-i18n="pay_recv">实收金额</label><input id="payRecv" type="number" inputmode="numeric" oninput="updateChange()"></div>
+    <div class="fld" style="margin:0"><label data-i18n="pay_chg">找零</label><div class="chg" id="payChange">¥0</div></div>
+  </div>
+  <div class="row" style="margin-top:12px">
+    <button class="btn gray" onclick="clearCart()" data-i18n="cart_clear">清空</button>
+    <button class="btn green" onclick="checkout(false)" data-i18n="cart_done">✓ 完成</button>
+    <button class="btn" style="flex:1.4" onclick="checkout(true)" data-i18n="cart_done_p">✓ 完成并打印 🖨</button>
+  </div>
+</div>
+
+<!-- 通用弹窗 -->
+<div id="modalMask">
+  <div id="modalBox">
+    <div class="hd" id="mHd"></div>
+    <div class="bd" id="mBd"></div>
+    <div class="ft" id="mFt"></div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+'use strict';
+/* ================= 多语言 ================= */
+const I18N = {
+zh:{
+  title:'展会收银台',
+  nav_pos:'收银', nav_ord:'订单', nav_inv:'库存', nav_set:'统计',
+  pill_off:'🖨 未连接', pill_on:'🖨 ',
+  pos_empty:'还没有商品。<br>先到「库存」页添加商品（支持批量导入，一分钟搞定）',
+  pos_empty_btn:'去添加商品',
+  low_title:'⚠️ 库存提醒（点击查看）', low_out:'已售罄', low_few:'余量不足',
+  soldout:'售罄', left:'余 ',
+  t_soldout:'「{n}」已售罄', t_stockmax:'「{n}」库存只剩 {x} 件，不能再加了', t_stockonly:'「{n}」库存只剩 {x} 件',
+  total:'合计', settle:'结算', pcs:'{n} 件',
+  cart_title:'本单商品', cart_clear:'清空', cart_done:'✓ 完成', cart_done_p:'✓ 完成并打印 🖨', cart_empty:'购物车是空的',
+  per_item:'/ 件', stock:'库存',
+  pm_cash:'现金', pm_zfb:'支付宝',
+  pay_recv:'实收金额', pay_chg:'找零', pay_recv_ph:'收到多少钱', pay_short:'还差 ¥{x}',
+  t_recv_bad:'实收金额没填对', t_recv_less:'实收 ¥{r} 少于合计 ¥{t}，还差 ¥{x}',
+  t_paid:'✅ {pm}收款 {t}　订单 {no} 已记录', t_chg:'💰 找零 ¥{x}',
+  t_low:'⚠️ 「{n}」余量仅剩 {x} 件', t_out:'🔴 「{n}」已售罄！',
+  t_noprinter:'未连接打印机，可到「订单」页补打', t_printed:'🖨 小票已打印',
+  ord_empty:'还没有订单', ord_done:'已完成', ord_cxl:'已取消', ord_print:'打印小票', ord_cancel:'取消订单',
+  ord_returned:'↩ 库存已全部返还', ord_chg:'找零¥{x}',
+  cxl_title:'取消订单 {no}？', cxl_body:'取消后，以下商品将<b>自动返还库存</b>：', cxl_note:'此订单金额 {t} 将不再计入统计。',
+  cxl_no:'再想想', cxl_yes:'确认取消并返还',
+  t_cancelled:'↩ 订单 {no} 已取消\n库存已返还：{list}', now_left:'现余',
+  inv_add:'＋ 添加商品', inv_batch:'📋 批量导入', inv_refill:'补满全部',
+  inv_empty:'点上方「批量导入」，把商品清单一次粘贴进来最快',
+  inv_cap:'上限', inv_warnline:'提醒线', inv_sold:'已售', inv_left:'余量', inv_edit:'编辑',
+  inv_outtag:'　已售罄', inv_fewtag:'　余量不足',
+  t_capmax:'已达库存上限 {x}（可在编辑里调高上限）',
+  rf_title:'补满全部库存？', rf_body:'所有商品的余量将恢复到各自的库存上限。适合新一场展会开始前使用。',
+  rf_no:'取消', rf_yes:'补满', t_refilled:'✅ 全部商品已补满至库存上限',
+  ep_add:'添加商品', ep_edit:'编辑商品',
+  ep_img:'商品图片（选填）', ep_img_pick:'📷 选择图片', e_img:'图片读取失败，请换一张试试',
+  e_quota:'⚠️ 本机存储空间不足，保存失败！请删除部分商品图片后重试',
+  ep_name:'商品名称', ep_name_ph:'如：白模-初音 1/7', ep_price:'单价（日元）', ep_cap:'库存上限', ep_cap_ph:'带了多少件',
+  ep_stock:'当前余量', ep_stock_ph:'默认=上限', ep_warn:'余量提醒线', ep_del:'删除这个商品',
+  ep_cancel:'取消', ep_save:'保存', t_saved:'已保存',
+  e_name:'请填写商品名称', e_price:'请填写正确的单价', e_cap:'请填写库存上限',
+  del_title:'删除「{n}」？', del_body:'历史订单记录不受影响，但收银页将不再显示该商品。', del_yes:'删除', t_deleted:'已删除',
+  bi_title:'批量导入商品',
+  bi_hint:'每行一个商品，格式：<b>名称，价格，库存上限</b>（可选第4项：提醒线，默认3）。中英文逗号都可以。',
+  bi_ph:'初音白模 1/7，3000，10\n胡桃白模 1/8，2500，8\nGK底座，500，30，5',
+  bi_go:'导入', e_bi_empty:'请粘贴商品清单', e_bi_line:'第 {x} 行格式不对，请检查（名称，价格，上限）',
+  t_imported:'✅ 已导入 {n} 个商品，余量已按上限补满',
+  st_today:'📊 今日统计', st_rev:'销售额', st_cnt:'订单数', st_qty:'售出件数',
+  rk_p:'商品', rk_s:'已售', rk_l:'余量', rk_a:'金额', rk_empty:'今天还没有销售记录', pm_old:'未记录',
+  pr_title:'🖨 小票打印机', pr_connect:'连接蓝牙打印机', pr_reconnect:'重新连接打印机', pr_test:'测试打印',
+  pr_paper:'纸宽', pr_mode:'打印方式', pr_mode_t:'文本（快）', pr_mode_i:'图片（兼容）', pr_auto:'收款后自动打印',
+  opt_off:'关闭', opt_on:'开启',
+  pr_hint:'iPhone 请用 App Store 的免费浏览器 <b>Bluefy</b> 打开本页面即可连接蓝牙打印；安卓用 Chrome 直接可用。小票乱码或日文字形不对时，请把打印方式切换为「图片」。',
+  pr_nosupport:'⚠️ 当前浏览器不支持网页蓝牙。iPhone 请到 App Store 下载免费浏览器 <b>Bluefy</b> 打开本页面；安卓请用 Chrome。收银记账功能不受影响。',
+  rc_title:'🧾 小票内容', rc_shop:'摊位名称（小票抬头）', rc_foot:'小票末尾附言',
+  def_shop:'展会摊位', def_foot:'感谢购买，仅作收款记录',
+  ex_title:'📤 数据导出', ex_orders:'订单明细 CSV', ex_inv:'库存汇总 CSV', ex_copy:'复制文字版收摊汇总',
+  t_csv:'已生成文件（若浏览器未下载，请用「复制文字版」代替）', t_copied:'汇总已复制，可粘贴到微信/备忘录',
+  dm_title:'⚠️ 数据管理',
+  dm_hint:'所有数据仅保存在本机浏览器中，请勿清除浏览器数据。新一场展会开始前可清空订单并补满库存。',
+  dm_clear:'清空全部订单', dm_reset:'恢复出厂',
+  co_title:'清空全部订单？', co_body:'将删除 {n} 条订单记录（<b>不会</b>改变当前库存余量）。建议先导出 CSV 再清空。',
+  co_yes:'清空', t_cleared:'订单已清空',
+  fr_title:'恢复出厂？', fr_body:'将删除<b>所有商品、订单和设置</b>，无法恢复！', fr_yes:'全部删除',
+  ver:'展会收银台 v1.2 · 离线可用',
+  // 小票
+  r_no:'单号', r_time:'时间', r_cxl:'（已取消）', r_cnt:'共 {n} 件', r_total:'合计', r_pm:'支付方式', r_recv:'实收', r_chg:'找零',
+  r_testname:'测试商品-中文OK', r_testno:'#测试',
+  // 蓝牙
+  bt_searching:'正在搜索蓝牙打印机…', bt_connecting:'正在连接{x}…', bt_retry:'（第{x}次尝试）',
+  bt_searchfail:'搜索失败：', bt_disconnected:'打印机已断开',
+  bt_failtitle:'连接不上打印机',
+  bt_failbody:'连续尝试 3 次都失败了（{e}）。<br><br>请按顺序检查后重试：<br><b>1.</b> 打印机<b>关机再开机</b><br><b>2.</b> 手机「设置 → 蓝牙」里若出现这台打印机，选择<b>忽略此设备</b>（蓝牙打印不需要系统配对，配对了反而占线）<br><b>3.</b> 彻底退出打印机厂商自带的 App<br><b>4.</b> 让打印机离手机近一点，重新连接',
+  bt_ok:'知道了',
+  bt_nochan_title:'已连上，但没找到打印通道',
+  bt_nochan_body:'蓝牙连接成功，但没发现可写入数据的通道。<br><br><b>请点下面按钮复制诊断信息发给开发者</b>：',
+  bt_copydiag:'复制诊断信息', bt_close:'关闭', t_diagcopied:'已复制',
+  bt_connected:'✅ 已连接打印机「{n}」，建议先测试打印', bt_unknown:'未知设备',
+  bt_gofirst:'请先到「统计」页连接蓝牙打印机', t_printsent:'✅ 已发送打印', t_printfail:'打印失败：',
+  t_printing:'🖨 正在打印…', t_testsent:'✅ 测试小票已发送，请看打印机出纸', t_tryimg:'\n可尝试切换打印方式为「图片」',
+  e_gbk:'此浏览器不支持文本编码，请把打印方式切换为「图片」',
+  // 导出
+  csv_o:['订单号','日期','时间','状态','商品','单价','数量','小计','订单合计','收款方式','实收','找零'],
+  csv_i:['商品','单价','库存上限','当前余量','已售出','销售额'],
+  csv_fn_o:'订单明细', csv_fn_i:'库存汇总',
+  sum_title:'【{s} 收摊汇总 {d}】', sum_line:'销售额：{r}　订单：{c} 单　售出：{q} 件', sum_pay:'收款：',
+  sum_items:'各商品：', sum_item:'{n}：售{s} 余{l}/{c}　{a}', sum_cxl:'（另有 {n} 笔已取消订单，库存均已返还）',
+},
+ja:{
+  title:'イベントレジ',
+  nav_pos:'レジ', nav_ord:'注文', nav_inv:'在庫', nav_set:'集計',
+  pill_off:'🖨 未接続', pill_on:'🖨 ',
+  pos_empty:'商品がまだありません。<br>「在庫」タブから商品を追加してください（一括インポートが最速）',
+  pos_empty_btn:'商品を追加',
+  low_title:'⚠️ 在庫アラート（タップで確認）', low_out:'完売', low_few:'残りわずか',
+  soldout:'完売', left:'残 ',
+  t_soldout:'「{n}」は完売です', t_stockmax:'「{n}」の在庫は残り {x} 点です', t_stockonly:'「{n}」の在庫は残り {x} 点です',
+  total:'合計', settle:'会計', pcs:'{n} 点',
+  cart_title:'この注文', cart_clear:'クリア', cart_done:'✓ 完了', cart_done_p:'✓ 完了して印刷 🖨', cart_empty:'カートは空です',
+  per_item:'/ 点', stock:'在庫',
+  pm_cash:'現金', pm_zfb:'Alipay',
+  pay_recv:'お預かり', pay_chg:'お釣り', pay_recv_ph:'預かり金額', pay_short:'あと ¥{x}',
+  t_recv_bad:'お預かり金額が正しくありません', t_recv_less:'お預かり ¥{r} が合計 ¥{t} に足りません（あと ¥{x}）',
+  t_paid:'✅ {pm}で {t} を受領　注文 {no} を記録', t_chg:'💰 お釣り ¥{x}',
+  t_low:'⚠️ 「{n}」残り {x} 点', t_out:'🔴 「{n}」完売！',
+  t_noprinter:'プリンター未接続。「注文」タブから後で印刷できます', t_printed:'🖨 レシートを印刷しました',
+  ord_empty:'注文はまだありません', ord_done:'完了', ord_cxl:'キャンセル', ord_print:'レシート印刷', ord_cancel:'注文取消',
+  ord_returned:'↩ 在庫返却済み', ord_chg:'お釣り¥{x}',
+  cxl_title:'注文 {no} を取り消しますか？', cxl_body:'取り消すと以下の商品が<b>在庫に戻ります</b>：', cxl_note:'この注文の {t} は集計から除外されます。',
+  cxl_no:'やめる', cxl_yes:'取り消して在庫を戻す',
+  t_cancelled:'↩ 注文 {no} を取り消しました\n在庫に返却：{list}', now_left:'現在',
+  inv_add:'＋ 商品追加', inv_batch:'📋 一括インポート', inv_refill:'全て補充',
+  inv_empty:'上の「一括インポート」で商品リストを貼り付けるのが最速です',
+  inv_cap:'上限', inv_warnline:'アラート線', inv_sold:'販売済', inv_left:'残', inv_edit:'編集',
+  inv_outtag:'　完売', inv_fewtag:'　残りわずか',
+  t_capmax:'在庫上限 {x} に達しています（編集で上限を変更できます）',
+  rf_title:'全在庫を補充しますか？', rf_body:'すべての商品の残数が在庫上限に戻ります。新しいイベントの前にご利用ください。',
+  rf_no:'キャンセル', rf_yes:'補充する', t_refilled:'✅ 全商品を上限まで補充しました',
+  ep_add:'商品を追加', ep_edit:'商品を編集',
+  ep_img:'商品画像（任意）', ep_img_pick:'📷 画像を選択', e_img:'画像の読み込みに失敗しました',
+  e_quota:'⚠️ 端末の保存容量が不足し、保存に失敗しました。商品画像をいくつか削除してください',
+  ep_name:'商品名', ep_name_ph:'例：ガレージキット 1/7', ep_price:'単価（円）', ep_cap:'在庫上限', ep_cap_ph:'持参数',
+  ep_stock:'現在庫', ep_stock_ph:'空欄=上限', ep_warn:'アラート線', ep_del:'この商品を削除',
+  ep_cancel:'キャンセル', ep_save:'保存', t_saved:'保存しました',
+  e_name:'商品名を入力してください', e_price:'単価を正しく入力してください', e_cap:'在庫上限を入力してください',
+  del_title:'「{n}」を削除しますか？', del_body:'過去の注文記録には影響しませんが、レジ画面に表示されなくなります。', del_yes:'削除', t_deleted:'削除しました',
+  bi_title:'商品の一括インポート',
+  bi_hint:'1行に1商品、フォーマット：<b>名前，価格，在庫上限</b>（4番目は任意：アラート線、省略時3）。全角・半角カンマ両方OK。',
+  bi_ph:'ガレージキットA 1/7，3000，10\nガレージキットB 1/8，2500，8\n台座，500，30，5',
+  bi_go:'インポート', e_bi_empty:'商品リストを貼り付けてください', e_bi_line:'{x} 行目のフォーマットが正しくありません（名前，価格，上限）',
+  t_imported:'✅ {n} 件の商品をインポートし、上限まで補充しました',
+  st_today:'📊 本日の集計', st_rev:'売上', st_cnt:'注文数', st_qty:'販売点数',
+  rk_p:'商品', rk_s:'販売', rk_l:'残', rk_a:'金額', rk_empty:'本日の販売はまだありません', pm_old:'未記録',
+  pr_title:'🖨 レシートプリンター', pr_connect:'Bluetoothプリンター接続', pr_reconnect:'プリンター再接続', pr_test:'テスト印刷',
+  pr_paper:'用紙幅', pr_mode:'印刷方式', pr_mode_t:'テキスト（速い）', pr_mode_i:'画像（互換）', pr_auto:'会計後に自動印刷',
+  opt_off:'オフ', opt_on:'オン',
+  pr_hint:'iPhoneはApp Storeの無料ブラウザ<b>Bluefy</b>でこのページを開くとBluetooth印刷が使えます。Androidは Chrome でOK。文字化けや字形がおかしい時は印刷方式を「画像」に切り替えてください。',
+  pr_nosupport:'⚠️ このブラウザはWeb Bluetoothに対応していません。iPhoneはApp Storeで<b>Bluefy</b>を入手してこのページを開いてください。レジ・記録機能はそのまま使えます。',
+  rc_title:'🧾 レシート内容', rc_shop:'店舗名（レシート見出し）', rc_foot:'レシート末尾メッセージ',
+  def_shop:'イベントブース', def_foot:'お買い上げありがとうございます',
+  ex_title:'📤 データ出力', ex_orders:'注文明細 CSV', ex_inv:'在庫 CSV', ex_copy:'テキスト集計をコピー',
+  t_csv:'ファイルを生成しました（ダウンロードされない場合は「テキスト集計」をご利用ください）', t_copied:'集計をコピーしました',
+  dm_title:'⚠️ データ管理',
+  dm_hint:'データはこの端末のブラウザ内のみに保存されます。ブラウザのデータ消去にご注意ください。新しいイベント前に注文をクリアして在庫を補充できます。',
+  dm_clear:'全注文を削除', dm_reset:'初期化',
+  co_title:'全注文を削除しますか？', co_body:'{n} 件の注文記録を削除します（現在の在庫数は<b>変わりません</b>）。先にCSV出力をおすすめします。',
+  co_yes:'削除', t_cleared:'注文を削除しました',
+  fr_title:'初期化しますか？', fr_body:'<b>すべての商品・注文・設定</b>が削除されます。元に戻せません！', fr_yes:'全て削除',
+  ver:'イベントレジ v1.2 · オフライン対応',
+  r_no:'No.', r_time:'日時', r_cxl:'（キャンセル）', r_cnt:'計 {n} 点', r_total:'合計', r_pm:'お支払い', r_recv:'お預かり', r_chg:'お釣り',
+  r_testname:'テスト商品', r_testno:'#TEST',
+  bt_searching:'Bluetoothプリンターを検索中…', bt_connecting:'接続中{x}…', bt_retry:'（{x}回目）',
+  bt_searchfail:'検索失敗：', bt_disconnected:'プリンターが切断されました',
+  bt_failtitle:'プリンターに接続できません',
+  bt_failbody:'3回試しましたが失敗しました（{e}）。<br><br>以下を順に確認して再試行してください：<br><b>1.</b> プリンターの<b>電源を入れ直す</b><br><b>2.</b> スマホの「設定→Bluetooth」にこのプリンターがあれば<b>登録解除</b>（ペアリング不要です）<br><b>3.</b> メーカー純正アプリを完全に終了する<br><b>4.</b> プリンターを近づけて再接続',
+  bt_ok:'OK',
+  bt_nochan_title:'接続しましたが印刷チャネルが見つかりません',
+  bt_nochan_body:'Bluetooth接続は成功しましたが、書き込み可能なチャネルがありません。<br><br><b>下のボタンで診断情報をコピーして開発者に送ってください</b>：',
+  bt_copydiag:'診断情報をコピー', bt_close:'閉じる', t_diagcopied:'コピーしました',
+  bt_connected:'✅ プリンター「{n}」に接続しました。まずテスト印刷をどうぞ', bt_unknown:'不明なデバイス',
+  bt_gofirst:'先に「集計」タブでプリンターを接続してください', t_printsent:'✅ 印刷を送信しました', t_printfail:'印刷失敗：',
+  t_printing:'🖨 印刷中…', t_testsent:'✅ テスト印刷を送信しました', t_tryimg:'\n印刷方式を「画像」に切り替えてみてください',
+  e_gbk:'このブラウザはテキストエンコードに対応していません。印刷方式を「画像」にしてください',
+  csv_o:['注文No','日付','時刻','状態','商品','単価','数量','小計','注文合計','支払方法','お預かり','お釣り'],
+  csv_i:['商品','単価','在庫上限','現在庫','販売済','売上'],
+  csv_fn_o:'注文明細', csv_fn_i:'在庫',
+  sum_title:'【{s} 集計 {d}】', sum_line:'売上：{r}　注文：{c} 件　販売：{q} 点', sum_pay:'支払：',
+  sum_items:'商品別：', sum_item:'{n}：売{s} 残{l}/{c}　{a}', sum_cxl:'（他にキャンセル {n} 件、在庫は返却済み）',
+},
+};
+function tt(k, vars){
+  let s = (I18N[LANG()][k] !== undefined) ? I18N[LANG()][k] : I18N.zh[k];
+  if(s === undefined) return k;
+  if(typeof s === 'string' && vars) for(const v in vars) s = s.split('{'+v+'}').join(vars[v]);
+  return s;
+}
+const LANG = () => state.settings.lang === 'ja' ? 'ja' : 'zh';
+const PM_NAME = () => ({cash:tt('pm_cash'), pp:'PayPay', zfb:tt('pm_zfb'), wx:'微信', old:tt('pm_old')});
+
+/* ================= 数据 ================= */
+const LS_KEY = 'expo_pos_v1';
+let state = {
+  products: [],           // {id,name,price,cap,stock,warn}
+  orders: [],             // {id,no,ts,items,total,status,pay:{m,recv,chg}}
+  settings: {shop:'', foot:'', paper:'80', pmode:'text', auto:'0', lastPay:'cash', lang:'zh'},
+  seq: {date:'', n:0},
+};
+let cart = new Map();     // pid -> qty
+
+function load(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw){ const s = JSON.parse(raw); Object.assign(state.settings, s.settings||{});
+      state.products = s.products||[]; state.orders = s.orders||[]; state.seq = s.seq||state.seq; }
+  }catch(e){ console.warn('load fail', e); }
+}
+function save(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+  catch(e){ toast(tt('e_quota'), 'err', 4500); }
+}
+const uid = () => Math.random().toString(36).slice(2,9) + Date.now().toString(36);
+const fmt = n => '¥' + Math.round(n).toLocaleString('ja-JP');   // 日元：整数、千分位
+const todayStr = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const timeStr = ts => { const d=new Date(ts); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function nextOrderNo(){
+  const t = todayStr();
+  if(state.seq.date !== t){ state.seq.date = t; state.seq.n = 0; }
+  state.seq.n++;
+  return '#' + String(state.seq.n).padStart(3,'0');
+}
+
+/* ================= 语言切换 ================= */
+function applyLang(){
+  document.documentElement.lang = LANG()==='ja' ? 'ja' : 'zh-CN';
+  document.title = tt('title');
+  document.querySelectorAll('[data-i18n]').forEach(el=>{ el.innerHTML = tt(el.dataset.i18n); });
+  document.getElementById('langBtn').textContent = LANG()==='ja' ? '🌐 中文' : '🌐 日本語';
+  document.getElementById('payRecv').placeholder = tt('pay_recv_ph');
+  setPill(!!printChar, bleDevice ? bleDevice.name : '');
+  renderPOS(); renderOrders(); renderInv(); renderStats();
+}
+function toggleLang(){
+  state.settings.lang = LANG()==='ja' ? 'zh' : 'ja';
+  save();
+  applyLang();
+}
+
+/* ================= Toast / Modal ================= */
+function toast(msg, type='ok', ms=2600, big=false){
+  const el = document.createElement('div');
+  el.className = `toast ${type}` + (big?' big':'');
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(()=>{ el.style.transition='opacity .3s'; el.style.opacity='0'; setTimeout(()=>el.remove(),320); }, ms);
+}
+function modal(title, bodyHTML, buttons){
+  document.getElementById('mHd').textContent = title;
+  document.getElementById('mBd').innerHTML = bodyHTML;
+  const ft = document.getElementById('mFt'); ft.innerHTML='';
+  buttons.forEach(b=>{
+    const btn = document.createElement('button');
+    btn.className = 'btn ' + (b.cls||'gray');
+    btn.textContent = b.label;
+    btn.onclick = () => {
+      // 防连点：点击后立刻禁用所有按钮，避免双击重复保存
+      ft.querySelectorAll('.btn').forEach(x=>x.disabled = true);
+      setTimeout(()=>ft.querySelectorAll('.btn').forEach(x=>x.disabled = false), 600);
+      if(!b.keep) closeModal();
+      if(b.fn) b.fn();
+    };
+    ft.appendChild(btn);
+  });
+  document.getElementById('modalMask').classList.add('show');
+}
+function closeModal(){ document.getElementById('modalMask').classList.remove('show'); }
+// 点弹窗外空白处关闭
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('modalMask').addEventListener('click', e=>{
+    if(e.target === document.getElementById('modalMask')) closeModal();
+  });
+});
+
+/* ================= Tab ================= */
+let curTab = 'pos';
+function switchTab(tab){
+  curTab = tab;
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('v-'+tab).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  renderCartBar();
+  if(tab==='pos') renderPOS();
+  if(tab==='ord') renderOrders();
+  if(tab==='inv') renderInv();
+  if(tab==='set') renderStats();
+  document.querySelector('main').scrollTop = 0;
+}
+
+/* ================= 收银 ================= */
+function renderPOS(){
+  const grid = document.getElementById('grid');
+  const emp = document.getElementById('posEmpty');
+  if(!state.products.length){ grid.innerHTML=''; emp.style.display='block'; renderLowBanner(); renderCartBar(); return; }
+  emp.style.display='none';
+  grid.innerHTML = state.products.map(p=>{
+    const inCart = cart.get(p.id)||0;
+    const avail = p.stock - inCart;
+    return `<button class="pcard ${p.stock<=0?'out':''} ${inCart?'incart':''}" onclick="tapProduct('${p.id}')">
+      ${inCart?`<span class="qty">×${inCart}</span>`:''}
+      ${p.img?`<img class="thumb" src="${p.img}" alt="">`:''}
+      <span class="nm">${esc(p.name)}</span>
+      <span class="stk ${p.stock<=0?'r':(avail<=p.warn?'y':'g')}">${p.stock<=0?tt('soldout'):tt('left')+avail}</span>
+      <span class="pr">${fmt(p.price)}</span>
+      ${inCart?`<span class="minus" onclick="event.stopPropagation();cartDec('${p.id}')">−</span>`:''}
+    </button>`;
+  }).join('');
+  renderLowBanner();
+  renderCartBar();
+}
+
+function renderLowBanner(){
+  const low = state.products.filter(p=>p.stock<=p.warn);
+  const bn = document.getElementById('lowBanner');
+  const dot = document.getElementById('invDot');
+  if(!low.length){ bn.classList.remove('show'); dot.classList.remove('show'); return; }
+  const out = low.filter(p=>p.stock<=0), few = low.filter(p=>p.stock>0);
+  let html = `<div class="t">${tt('low_title')}</div>`;
+  if(out.length) html += `${tt('low_out')}：${out.map(p=>esc(p.name)).join('、')}<br>`;
+  if(few.length) html += `${tt('low_few')}：${few.map(p=>`${esc(p.name)}(${p.stock})`).join('、')}`;
+  bn.innerHTML = html;
+  bn.classList.add('show');
+  dot.classList.add('show');
+}
+
+function tapProduct(pid){
+  const p = state.products.find(x=>x.id===pid); if(!p) return;
+  const cur = cart.get(pid)||0;
+  if(p.stock<=0){ toast(tt('t_soldout',{n:p.name}), 'err', 1800); return; }
+  if(cur >= p.stock){ toast(tt('t_stockmax',{n:p.name,x:p.stock}), 'warn', 2200); return; }
+  cart.set(pid, cur+1);
+  renderPOS();
+}
+function cartDec(pid){
+  const cur = cart.get(pid)||0;
+  if(cur<=1) cart.delete(pid); else cart.set(pid, cur-1);
+  renderPOS();
+}
+function renderCartBar(){
+  const bar = document.getElementById('cartBar');
+  let cnt=0, amt=0;
+  cart.forEach((q,pid)=>{ const p=state.products.find(x=>x.id===pid); if(p){cnt+=q; amt+=q*p.price;} });
+  if(cnt===0 || curTab!=='pos'){ bar.classList.remove('show'); return; }
+  document.getElementById('cbCnt').textContent = tt('pcs',{n:cnt});
+  document.getElementById('cbAmt').textContent = fmt(amt);
+  bar.classList.add('show');
+}
+function cartTotalNum(){
+  let t=0; cart.forEach((q,pid)=>{ const p=state.products.find(x=>x.id===pid); if(p) t+=q*p.price; });
+  return Math.round(t);
+}
+let payMethod = 'cash';
+function setPay(m){
+  payMethod = m;
+  document.querySelectorAll('.pm').forEach(b=>b.classList.toggle('sel', b.dataset.pm===m));
+  document.getElementById('cashRow').style.display = m==='cash' ? 'flex' : 'none';
+  updateChange();
+}
+function updateChange(){
+  const el = document.getElementById('payChange');
+  const v = document.getElementById('payRecv').value.trim();
+  const total = cartTotalNum();
+  if(v===''){ el.textContent='¥0'; el.classList.remove('neg'); return; }
+  const recv = parseFloat(v);
+  if(isNaN(recv)){ el.textContent='—'; el.classList.remove('neg'); return; }
+  const diff = Math.round(recv-total);
+  if(diff<0){ el.textContent = tt('pay_short',{x:Math.abs(diff).toLocaleString('ja-JP')}); el.classList.add('neg'); }
+  else{ el.textContent = '¥'+diff.toLocaleString('ja-JP'); el.classList.remove('neg'); }
+}
+function openCart(){
+  document.getElementById('payRecv').value='';
+  setPay(state.settings.lastPay||'cash');
+  renderCartBody();
+  document.getElementById('cartMask').classList.add('show');
+  document.getElementById('cartSheet').classList.add('show');
+}
+function closeCart(){
+  document.getElementById('cartMask').classList.remove('show');
+  document.getElementById('cartSheet').classList.remove('show');
+}
+function renderCartBody(){
+  const body = document.getElementById('cartBody');
+  let total = 0, html = '';
+  cart.forEach((q,pid)=>{
+    const p = state.products.find(x=>x.id===pid); if(!p) return;
+    total += q*p.price;
+    html += `<div class="citem">
+      <div class="inf"><div class="n">${esc(p.name)}</div><div class="p">${fmt(p.price)} ${tt('per_item')} · ${tt('stock')} ${p.stock}</div></div>
+      <div class="stp">
+        <button onclick="cartAdj('${pid}',-1)">−</button><span>${q}</span><button onclick="cartAdj('${pid}',1)">＋</button>
+      </div>
+      <div class="sub">${fmt(q*p.price)}</div>
+    </div>`;
+  });
+  body.innerHTML = html || `<p class="hint" style="padding:20px 0;text-align:center">${tt('cart_empty')}</p>`;
+  document.getElementById('cartTotal').textContent = fmt(total);
+}
+function cartAdj(pid, d){
+  const p = state.products.find(x=>x.id===pid); if(!p) return;
+  let q = (cart.get(pid)||0) + d;
+  if(d>0 && q > p.stock){ toast(tt('t_stockonly',{n:p.name,x:p.stock}), 'warn', 1800); return; }
+  if(q<=0) cart.delete(pid); else cart.set(pid,q);
+  renderCartBody(); renderPOS(); updateChange();
+  if(cart.size===0) closeCart();
+}
+function clearCart(){ cart.clear(); closeCart(); renderPOS(); }
+
+let checkoutLock = false;
+function checkout(andPrint){
+  if(cart.size===0 || checkoutLock) return;
+  for(const [pid,q] of cart){
+    const p = state.products.find(x=>x.id===pid);
+    if(!p || q > p.stock){ toast(tt('t_stockonly',{n:p?p.name:'?',x:p?p.stock:0}), 'err'); return; }
+  }
+  const total = cartTotalNum();
+  let recv = total, chg = 0;
+  if(payMethod==='cash'){
+    const v = document.getElementById('payRecv').value.trim();
+    if(v!==''){
+      recv = parseFloat(v);
+      if(isNaN(recv)){ toast(tt('t_recv_bad'), 'err'); return; }
+      if(recv < total){ toast(tt('t_recv_less',{r:recv.toLocaleString('ja-JP'),t:total.toLocaleString('ja-JP'),x:(total-recv).toLocaleString('ja-JP')}), 'err', 3200); return; }
+      chg = Math.round(recv-total);
+    }
+  }
+  checkoutLock = true;
+  setTimeout(()=>checkoutLock=false, 800);
+  const items=[];
+  cart.forEach((q,pid)=>{
+    const p = state.products.find(x=>x.id===pid);
+    items.push({pid, name:p.name, price:p.price, qty:q});
+    p.stock -= q;
+  });
+  const order = {id:uid(), no:nextOrderNo(), ts:Date.now(), items, total, status:'done',
+    pay:{m:payMethod, recv, chg}};
+  state.orders.unshift(order);
+  state.settings.lastPay = payMethod;
+  save();
+  cart.clear(); closeCart(); renderPOS();
+  const chgTip = (payMethod==='cash' && chg>0) ? '\n'+tt('t_chg',{x:chg.toLocaleString('ja-JP')}) : '';
+  toast(tt('t_paid',{pm:PM_NAME()[payMethod], t:fmt(total), no:order.no}) + chgTip, 'ok', chgTip?4200:3000, true);
+  const warns = items.map(it=>state.products.find(p=>p.id===it.pid)).filter(Boolean)
+    .filter(p=>p.stock<=p.warn);
+  warns.forEach((p,i)=>{
+    setTimeout(()=>toast(p.stock<=0 ? tt('t_out',{n:p.name}) : tt('t_low',{n:p.name,x:p.stock}), p.stock<=0?'err':'warn', 3500), 400+i*250);
+  });
+  if(andPrint){
+    if(printChar) printOrder(order).then(()=>toast(tt('t_printed'),'ok',1600)).catch(e=>toast(tt('t_printfail')+e.message,'err',4000));
+    else toast(tt('t_noprinter'), 'warn', 3000);
+  }else if(state.settings.auto==='1' && printChar){
+    printOrder(order).catch(e=>toast(tt('t_printfail')+e.message,'err'));
+  }
+}
+
+/* ================= 订单 ================= */
+function renderOrders(){
+  const list = document.getElementById('ordList');
+  const emp = document.getElementById('ordEmpty');
+  if(!state.orders.length){ list.innerHTML=''; emp.style.display='block'; return; }
+  emp.style.display='none';
+  list.innerHTML = state.orders.map(o=>{
+    const cxl = o.status==='cancelled';
+    const pm = o.pay ? (PM_NAME()[o.pay.m]||'') : '';
+    const chg = (o.pay && o.pay.m==='cash' && o.pay.chg>0) ? ' '+tt('ord_chg',{x:o.pay.chg.toLocaleString('ja-JP')}) : '';
+    return `<div class="ocard ${cxl?'cancelled':''}">
+      <div class="top">
+        <span class="no">${o.no} <span style="font-weight:400;color:var(--sub);font-size:13px">${timeStr(o.ts)}</span></span>
+        <span class="chip ${cxl?'cxl':'done'}">${cxl?tt('ord_cxl'):tt('ord_done')}</span>
+      </div>
+      <div class="items">${o.items.map(it=>`${esc(it.name)} ×${it.qty}`).join('　')}</div>
+      ${cxl?`<div class="ret-note">${tt('ord_returned')}</div>`:''}
+      <div class="bot">
+        <span class="amt">${fmt(o.total)} <span style="font-size:12px;font-weight:600;color:var(--sub)">${pm}${chg}</span></span>
+        <span class="ops">
+          <button class="btn sm ghost" onclick="printOrderById('${o.id}')">${tt('ord_print')}</button>
+          ${cxl?'':`<button class="btn sm red" onclick="askCancel('${o.id}')">${tt('ord_cancel')}</button>`}
+        </span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function askCancel(oid){
+  const o = state.orders.find(x=>x.id===oid); if(!o || o.status==='cancelled') return;
+  const list = o.items.map(it=>`・${esc(it.name)} ×${it.qty}`).join('<br>');
+  modal(tt('cxl_title',{no:o.no}),
+    `${tt('cxl_body')}<div class="ret-list">${list}</div>
+     <p style="margin-top:8px;color:var(--sub);font-size:13px">${tt('cxl_note',{t:fmt(o.total)})}</p>`,
+    [
+      {label:tt('cxl_no'), cls:'gray'},
+      {label:tt('cxl_yes'), cls:'red', fn:()=>doCancel(oid)},
+    ]);
+}
+function doCancel(oid){
+  const o = state.orders.find(x=>x.id===oid); if(!o || o.status==='cancelled') return;
+  const retMsgs = [];
+  o.items.forEach(it=>{
+    const p = state.products.find(x=>x.id===it.pid);
+    if(p){ p.stock += it.qty; retMsgs.push(`${p.name} ×${it.qty}（${tt('now_left')} ${p.stock}）`); }
+  });
+  o.status = 'cancelled';
+  save();
+  renderOrders(); renderPOS();
+  toast(tt('t_cancelled',{no:o.no, list:retMsgs.join('、')}), 'ok', 4200, true);
+}
+
+/* ================= 库存 ================= */
+function renderInv(){
+  const list = document.getElementById('invList');
+  if(!state.products.length){
+    list.innerHTML = `<div class="empty"><div class="ic">📦</div><p>${tt('inv_empty')}</p></div>`;
+    return;
+  }
+  list.innerHTML = state.products.map(p=>{
+    const ratio = p.cap>0 ? Math.min(100, p.stock/p.cap*100) : 0;
+    const cls = p.stock<=0?'r':(p.stock<=p.warn?'y':'');
+    const sold = soldCount(p.id);
+    return `<div class="icard">
+      <div class="top">
+        <div style="display:flex;gap:10px;align-items:center;min-width:0">
+          ${p.img?`<img class="ithumb" src="${p.img}" alt="">`:''}
+          <div style="min-width:0">
+            <div class="nm">${esc(p.name)}</div>
+            <div class="meta">${fmt(p.price)} · ${tt('inv_cap')} ${p.cap} · ${tt('inv_warnline')} ≤${p.warn} · ${tt('inv_sold')} ${sold}</div>
+          </div>
+        </div>
+        <button class="btn sm ghost" onclick="openEditProduct('${p.id}')">${tt('inv_edit')}</button>
+      </div>
+      <div class="bar"><i class="${cls}" style="width:${ratio}%"></i></div>
+      <div class="foot">
+        <span>${tt('inv_left')} <b style="color:var(--ink);font-size:14px">${p.stock}</b> / ${p.cap}
+          ${p.stock<=0?`<span class="warn-tag">${tt('inv_outtag')}</span>`:(p.stock<=p.warn?`<span class="warn-tag">${tt('inv_fewtag')}</span>`:'')}
+        </span>
+        <span style="display:flex;gap:6px">
+          <button class="btn sm gray" onclick="adjStock('${p.id}',-1)">−1</button>
+          <button class="btn sm gray" onclick="adjStock('${p.id}',1)">＋1</button>
+        </span>
+      </div>
+    </div>`;
+  }).join('');
+}
+function soldCount(pid){
+  let n=0;
+  state.orders.forEach(o=>{ if(o.status==='done') o.items.forEach(it=>{ if(it.pid===pid) n+=it.qty; }); });
+  return n;
+}
+function adjStock(pid, d){
+  const p = state.products.find(x=>x.id===pid); if(!p) return;
+  const nv = p.stock + d;
+  if(nv < 0) return;
+  if(nv > p.cap){ toast(tt('t_capmax',{x:p.cap}), 'warn', 2200); return; }
+  p.stock = nv; save(); renderInv(); renderLowBanner();
+}
+function refillAll(){
+  if(!state.products.length) return;
+  modal(tt('rf_title'), tt('rf_body'), [
+    {label:tt('rf_no'), cls:'gray'},
+    {label:tt('rf_yes'), cls:'green', fn:()=>{
+      state.products.forEach(p=>p.stock=p.cap);
+      save(); renderInv(); renderPOS();
+      toast(tt('t_refilled'), 'ok');
+    }},
+  ]);
+}
+let pendingImg;   // undefined=未改动, null=已移除, string=新图
+function openEditProduct(pid){
+  const p = pid ? state.products.find(x=>x.id===pid) : null;
+  pendingImg = undefined;
+  modal(p?tt('ep_edit'):tt('ep_add'), `
+    <div class="fld"><label>${tt('ep_img')}</label>
+      <div style="display:flex;gap:10px;align-items:center">
+        <img id="fImgPrev" src="${p&&p.img?p.img:''}" style="width:56px;height:56px;border-radius:9px;object-fit:cover;background:#f1f5f9;flex:none;${p&&p.img?'':'display:none'}" alt="">
+        <button class="btn sm ghost" style="flex:1" onclick="document.getElementById('fImg').click()">${tt('ep_img_pick')}</button>
+        <button class="btn sm red" id="fImgDel" style="${p&&p.img?'':'display:none'}" onclick="removeImg()">✕</button>
+        <input type="file" id="fImg" accept="image/*" style="display:none" onchange="pickImg(this)">
+      </div>
+    </div>
+    <div class="fld"><label>${tt('ep_name')}</label><input id="fNm" value="${p?esc(p.name):''}" placeholder="${tt('ep_name_ph')}"></div>
+    <div class="row">
+      <div class="fld"><label>${tt('ep_price')}</label><input id="fPr" type="number" inputmode="numeric" value="${p?p.price:''}" placeholder="0"></div>
+      <div class="fld"><label>${tt('ep_cap')}</label><input id="fCap" type="number" inputmode="numeric" value="${p?p.cap:''}" placeholder="${tt('ep_cap_ph')}"></div>
+    </div>
+    <div class="row">
+      <div class="fld"><label>${tt('ep_stock')}</label><input id="fStk" type="number" inputmode="numeric" value="${p?p.stock:''}" placeholder="${tt('ep_stock_ph')}"></div>
+      <div class="fld"><label>${tt('ep_warn')}</label><input id="fWn" type="number" inputmode="numeric" value="${p?p.warn:3}"></div>
+    </div>
+    ${p?`<button class="btn red block sm" onclick="deleteProduct('${p.id}')">${tt('ep_del')}</button>`:''}
+  `, [
+    {label:tt('ep_cancel'), cls:'gray'},
+    {label:tt('ep_save'), cls:'green', keep:true, fn:()=>saveProduct(pid)},
+  ]);
+}
+function saveProduct(pid){
+  const nm = document.getElementById('fNm').value.trim();
+  const pr = parseFloat(document.getElementById('fPr').value);
+  const cap = parseInt(document.getElementById('fCap').value);
+  let stk = document.getElementById('fStk').value.trim()===''? NaN : parseInt(document.getElementById('fStk').value);
+  let wn = parseInt(document.getElementById('fWn').value);
+  if(!nm){ toast(tt('e_name'),'err'); return; }
+  if(isNaN(pr)||pr<0){ toast(tt('e_price'),'err'); return; }
+  if(isNaN(cap)||cap<0){ toast(tt('e_cap'),'err'); return; }
+  if(isNaN(stk)) stk = cap;
+  if(stk>cap) stk = cap;
+  if(isNaN(wn)||wn<0) wn = 3;
+  if(pid){
+    const p = state.products.find(x=>x.id===pid);
+    Object.assign(p, {name:nm, price:pr, cap, stock:stk, warn:wn});
+    if(pendingImg !== undefined){ if(pendingImg) p.img = pendingImg; else delete p.img; }
+  }else{
+    const np = {id:uid(), name:nm, price:pr, cap, stock:stk, warn:wn};
+    if(pendingImg) np.img = pendingImg;
+    state.products.push(np);
+  }
+  save(); closeModal(); renderInv(); renderPOS();
+  toast(tt('t_saved'), 'ok', 1400);
+}
+function pickImg(inp){
+  const f = inp.files && inp.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    const im = new Image();
+    im.onload = () => {
+      const M = 240;
+      const sc = Math.min(1, M/Math.max(im.width, im.height));
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(im.width*sc));
+      cv.height = Math.max(1, Math.round(im.height*sc));
+      const cx = cv.getContext('2d');
+      cx.fillStyle='#fff'; cx.fillRect(0,0,cv.width,cv.height);
+      cx.drawImage(im, 0, 0, cv.width, cv.height);
+      pendingImg = cv.toDataURL('image/jpeg', 0.72);
+      const pv = document.getElementById('fImgPrev');
+      if(pv){ pv.src = pendingImg; pv.style.display='block'; }
+      const del = document.getElementById('fImgDel');
+      if(del) del.style.display='inline-flex';
+    };
+    im.onerror = () => toast(tt('e_img'), 'err');
+    im.src = rd.result;
+  };
+  rd.onerror = () => toast(tt('e_img'), 'err');
+  rd.readAsDataURL(f);
+}
+function removeImg(){
+  pendingImg = null;
+  const pv = document.getElementById('fImgPrev'); if(pv) pv.style.display='none';
+  const del = document.getElementById('fImgDel'); if(del) del.style.display='none';
+  const inp = document.getElementById('fImg'); if(inp) inp.value='';
+}
+function deleteProduct(pid){
+  const p = state.products.find(x=>x.id===pid); if(!p) return;
+  closeModal();
+  modal(tt('del_title',{n:p.name}), tt('del_body'), [
+    {label:tt('ep_cancel'), cls:'gray'},
+    {label:tt('del_yes'), cls:'red', fn:()=>{
+      state.products = state.products.filter(x=>x.id!==pid);
+      cart.delete(pid);
+      save(); renderInv(); renderPOS();
+      toast(tt('t_deleted'), 'ok', 1400);
+    }},
+  ]);
+}
+function openBatchImport(){
+  modal(tt('bi_title'), `
+    <p class="hint" style="margin-bottom:8px">${tt('bi_hint')}</p>
+    <textarea id="fBatch" rows="8" placeholder="${tt('bi_ph')}"></textarea>
+  `, [
+    {label:tt('ep_cancel'), cls:'gray'},
+    {label:tt('bi_go'), cls:'green', keep:true, fn:doBatchImport},
+  ]);
+}
+function doBatchImport(){
+  const txt = document.getElementById('fBatch').value.trim();
+  if(!txt){ toast(tt('e_bi_empty'),'err'); return; }
+  const lines = txt.split('\n').map(l=>l.trim()).filter(Boolean);
+  const news=[]; const errs=[];
+  lines.forEach((l,i)=>{
+    const parts = l.split(/[,，]/).map(s=>s.trim());
+    const [nm, pr, cap, wn] = parts;
+    const price = parseFloat(pr), capN = parseInt(cap), wnN = parseInt(wn);
+    if(!nm || isNaN(price) || isNaN(capN)){ errs.push(i+1); return; }
+    news.push({id:uid(), name:nm, price, cap:capN, stock:capN, warn:isNaN(wnN)?3:wnN});
+  });
+  if(errs.length){ toast(tt('e_bi_line',{x:errs.join('、')}), 'err', 3600); return; }
+  state.products.push(...news);
+  save(); closeModal(); renderInv(); renderPOS();
+  toast(tt('t_imported',{n:news.length}), 'ok', 3000, true);
+}
+
+/* ================= 统计 / 导出 ================= */
+function renderStats(){
+  const todays = state.orders.filter(o=>o.status==='done' && new Date(o.ts).toDateString()===new Date().toDateString());
+  let rev=0, qty=0;
+  const per = new Map();
+  todays.forEach(o=>{ rev+=o.total; o.items.forEach(it=>{
+    qty+=it.qty;
+    const e = per.get(it.pid)||{name:it.name, qty:0, amt:0};
+    e.qty+=it.qty; e.amt+=it.qty*it.price; per.set(it.pid,e);
+  });});
+  document.getElementById('stRev').textContent = fmt(rev);
+  document.getElementById('stCnt').textContent = todays.length;
+  document.getElementById('stQty').textContent = qty;
+  const pb = document.getElementById('payBreak');
+  const byPm = {};
+  todays.forEach(o=>{ const m = o.pay ? o.pay.m : 'old'; byPm[m] = (byPm[m]||0) + o.total; });
+  const parts = Object.entries(byPm).map(([m,v])=>`${PM_NAME()[m]||m} <b>${fmt(v)}</b>`);
+  if(parts.length){ pb.innerHTML = '💳 ' + parts.join('　·　'); pb.style.display='block'; }
+  else pb.style.display='none';
+  const rows = [...per.entries()].sort((a,b)=>b[1].qty-a[1].qty).map(([pid,e])=>{
+    const p = state.products.find(x=>x.id===pid);
+    return `<tr><td>${esc(e.name)}</td><td>${e.qty}</td><td>${p?p.stock:'-'}</td><td>${fmt(e.amt)}</td></tr>`;
+  }).join('');
+  document.querySelector('#rankTbl tbody').innerHTML = rows || `<tr><td colspan="4" style="color:var(--sub)">${tt('rk_empty')}</td></tr>`;
+  document.getElementById('setShop').value = state.settings.shop || tt('def_shop');
+  document.getElementById('setFoot').value = state.settings.foot!==undefined && state.settings.foot!=='' ? state.settings.foot : tt('def_foot');
+  document.getElementById('setPaper').value = state.settings.paper;
+  document.getElementById('setPmode').value = state.settings.pmode;
+  document.getElementById('setAuto').value = state.settings.auto;
+}
+function saveSettings(){
+  state.settings.shop = document.getElementById('setShop').value.trim()||tt('def_shop');
+  state.settings.foot = document.getElementById('setFoot').value.trim();
+  state.settings.paper = document.getElementById('setPaper').value;
+  state.settings.pmode = document.getElementById('setPmode').value;
+  state.settings.auto = document.getElementById('setAuto').value;
+  save();
+}
+function csvDownload(name, rows){
+  const csv = '﻿' + rows.map(r=>r.map(c=>{
+    c = String(c==null?'':c);
+    return /[",\n]/.test(c) ? '"'+c.replace(/"/g,'""')+'"' : c;
+  }).join(',')).join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+  toast(tt('t_csv'), 'info', 3000);
+}
+function exportCSV(kind){
+  if(kind==='orders'){
+    const rows = [tt('csv_o').slice()];
+    state.orders.slice().reverse().forEach(o=>{
+      const d = new Date(o.ts);
+      o.items.forEach((it,i)=>{
+        rows.push([o.no, d.toLocaleDateString('ja-JP'), timeStr(o.ts), o.status==='done'?tt('ord_done'):tt('ord_cxl'),
+          it.name, it.price, it.qty, it.price*it.qty,
+          i===0?o.total:'', i===0?(o.pay?PM_NAME()[o.pay.m]:''):'', i===0?(o.pay?o.pay.recv:''):'', i===0?(o.pay?o.pay.chg:''):'']);
+      });
+    });
+    csvDownload(`${tt('csv_fn_o')}_${todayStr()}.csv`, rows);
+  }else{
+    const rows = [tt('csv_i').slice()];
+    state.products.forEach(p=>{
+      const sold = soldCount(p.id);
+      rows.push([p.name, p.price, p.cap, p.stock, sold, sold*p.price]);
+    });
+    csvDownload(`${tt('csv_fn_i')}_${todayStr()}.csv`, rows);
+  }
+}
+function copySummary(){
+  const done = state.orders.filter(o=>o.status==='done');
+  let rev=0, qty=0;
+  done.forEach(o=>{rev+=o.total; o.items.forEach(it=>qty+=it.qty);});
+  const byPm = {};
+  done.forEach(o=>{ const m = o.pay ? o.pay.m : 'old'; byPm[m] = (byPm[m]||0) + o.total; });
+  const pmLine = Object.entries(byPm).map(([m,v])=>`${PM_NAME()[m]||m} ${fmt(v)}`).join('　');
+  let txt = tt('sum_title',{s:state.settings.shop||tt('def_shop'), d:todayStr()}) + '\n'
+    + tt('sum_line',{r:fmt(rev), c:done.length, q:qty}) + '\n'
+    + (pmLine ? tt('sum_pay')+pmLine+'\n' : '') + '\n' + tt('sum_items') + '\n';
+  state.products.forEach(p=>{
+    const sold = soldCount(p.id);
+    txt += tt('sum_item',{n:p.name, s:sold, l:p.stock, c:p.cap, a:fmt(sold*p.price)}) + '\n';
+  });
+  const cxl = state.orders.filter(o=>o.status==='cancelled').length;
+  if(cxl) txt += '\n' + tt('sum_cxl',{n:cxl});
+  navigator.clipboard.writeText(txt).then(()=>toast(tt('t_copied'), 'ok'))
+    .catch(()=>{ modal(tt('ex_copy'), `<textarea rows="12" style="width:100%">${esc(txt)}</textarea>`, [{label:tt('bt_close'),cls:'gray'}]); });
+}
+function clearOrders(){
+  modal(tt('co_title'), tt('co_body',{n:state.orders.length}), [
+    {label:tt('ep_cancel'), cls:'gray'},
+    {label:tt('co_yes'), cls:'red', fn:()=>{
+      state.orders=[]; state.seq={date:'',n:0}; save(); renderOrders(); renderStats();
+      toast(tt('t_cleared'), 'ok');
+    }},
+  ]);
+}
+function factoryReset(){
+  modal(tt('fr_title'), tt('fr_body'), [
+    {label:tt('ep_cancel'), cls:'gray'},
+    {label:tt('fr_yes'), cls:'red', fn:()=>{
+      localStorage.removeItem(LS_KEY); location.reload();
+    }},
+  ]);
+}
+
+/* ================= GBK 编码（利用 TextDecoder 反查，无需内置码表） ================= */
+let gbkMap = null;
+function ensureGbk(){
+  if(gbkMap) return true;
+  try{
+    const dec = new TextDecoder('gbk');
+    gbkMap = new Map();
+    const buf = new Uint8Array(2);
+    for(let hi=0x81; hi<=0xFE; hi++){
+      for(let lo=0x40; lo<=0xFE; lo++){
+        if(lo===0x7F) continue;
+        buf[0]=hi; buf[1]=lo;
+        const s = dec.decode(buf);
+        if(s.length===1 && s.codePointAt(0)!==0xFFFD && !gbkMap.has(s)) gbkMap.set(s, (hi<<8)|lo);
+      }
+    }
+    return gbkMap.size > 20000;
+  }catch(e){ gbkMap=null; return false; }
+}
+function gbkEncode(str){
+  const out=[];
+  for(const ch of str){
+    const cp = ch.codePointAt(0);
+    if(cp<0x80){ out.push(cp); continue; }
+    const g = gbkMap.get(ch);
+    if(g){ out.push(g>>8, g&0xFF); } else { out.push(0x3F); } // '?'
+  }
+  return out;
+}
+const bw = str => [...str].reduce((n,c)=>n+(c.codePointAt(0)<0x80?1:2),0); // 显示宽度
+
+/* ================= ESC/POS 小票构建 ================= */
+function padLR(l, r, W){
+  const space = W - bw(l) - bw(r);
+  return space>=1 ? l + ' '.repeat(space) + r : l + '\n' + ' '.repeat(Math.max(0,W-bw(r))) + r;
+}
+function receiptLines(order){
+  const s = state.settings;
+  const d = new Date(order.ts);
+  const L=[];
+  L.push({t:s.shop||tt('def_shop'), big:true, center:true, bold:true});
+  L.push({t:'', });
+  L.push({t:`${tt('r_no')} ${order.no}${order.status==='cancelled'?tt('r_cxl'):''}`});
+  L.push({t:`${tt('r_time')} ${d.toLocaleDateString('ja-JP')} ${timeStr(order.ts)}`});
+  L.push({t:'--SEP--'});
+  order.items.forEach(it=>{
+    L.push({t:it.name, bold:true});
+    L.push({t:['  '+fmt(it.price)+' × '+it.qty, fmt(it.price*it.qty)], lr:true});
+  });
+  L.push({t:'--SEP--'});
+  const cnt = order.items.reduce((n,it)=>n+it.qty,0);
+  L.push({t:[tt('r_cnt',{n:cnt}), tt('r_total')+' '+fmt(order.total)], lr:true, bold:true});
+  if(order.pay){
+    L.push({t:[tt('r_pm'), PM_NAME()[order.pay.m]||'-'], lr:true});
+    if(order.pay.m==='cash' && order.pay.recv !== order.total){
+      L.push({t:[`${tt('r_recv')} ${fmt(order.pay.recv)}`, `${tt('r_chg')} ${fmt(order.pay.chg)}`], lr:true});
+    }
+  }
+  const foot = s.foot!==undefined && s.foot!=='' ? s.foot : tt('def_foot');
+  if(foot){ L.push({t:''}); L.push({t:foot, center:true}); }
+  return L;
+}
+function buildTextReceipt(order){
+  if(!ensureGbk()) throw new Error(tt('e_gbk'));
+  const W = state.settings.paper==='80' ? 48 : 32;
+  const b = [];
+  const push = (...xs)=>b.push(...xs);
+  push(0x1B,0x40);           // init
+  push(0x1C,0x26);           // 中文模式
+  const line = (arr)=>{ b.push(...arr, 0x0A); };
+  receiptLines(order).forEach(ln=>{
+    if(ln.t==='--SEP--'){ push(0x1B,0x61,0); line(gbkEncode('-'.repeat(W))); return; }
+    push(0x1B,0x61, ln.center?1:0);
+    push(0x1B,0x45, ln.bold?1:0);
+    push(0x1D,0x21, ln.big?0x11:0x00);
+    let txt;
+    if(ln.lr){ txt = padLR(ln.t[0], ln.t[1], W); }
+    else txt = ln.t;
+    line(gbkEncode(txt));
+    push(0x1D,0x21,0x00, 0x1B,0x45,0);
+  });
+  push(0x0A,0x0A,0x0A,0x0A); // 走纸
+  return new Uint8Array(b);
+}
+/* 图片模式：canvas 渲染再转光栅位图，规避编码/字库问题（日文小票推荐） */
+function buildImgReceipt(order){
+  const Wd = state.settings.paper==='80' ? 576 : 384;
+  const lines = receiptLines(order);
+  const cv = document.createElement('canvas');
+  const ctx = cv.getContext('2d');
+  const FS = 26, FSB = 40, LH = 36, LHB = 52, PAD = 6;
+  let h = 20;
+  lines.forEach(ln=>{ h += ln.big?LHB:LH; });
+  h += 30;
+  cv.width = Wd; cv.height = h;
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,Wd,h);
+  ctx.fillStyle='#000'; ctx.textBaseline='top';
+  let y = 10;
+  const FONT = '"Hiragino Sans","PingFang SC","Microsoft YaHei",sans-serif';
+  lines.forEach(ln=>{
+    const big = !!ln.big;
+    ctx.font = `${(ln.bold||big)?'bold ':''}${big?FSB:FS}px ${FONT}`;
+    if(ln.t==='--SEP--'){
+      ctx.fillRect(PAD, y+Math.floor(LH/2)-1, Wd-PAD*2, 2);
+    }else if(ln.lr){
+      ctx.fillText(ln.t[0], PAD, y);
+      const w = ctx.measureText(ln.t[1]).width;
+      ctx.fillText(ln.t[1], Wd-PAD-w, y);
+    }else if(ln.center){
+      const w = ctx.measureText(ln.t).width;
+      ctx.fillText(ln.t, Math.max(PAD,(Wd-w)/2), y);
+    }else{
+      ctx.fillText(ln.t, PAD, y);
+    }
+    y += big?LHB:LH;
+  });
+  const img = ctx.getImageData(0,0,Wd,h).data;
+  const bytesPerRow = Wd/8;
+  const out = [0x1B,0x40];
+  const SLICE = 120;
+  for(let y0=0; y0<h; y0+=SLICE){
+    const rows = Math.min(SLICE, h-y0);
+    out.push(0x1D,0x76,0x30,0x00, bytesPerRow&0xFF, bytesPerRow>>8, rows&0xFF, rows>>8);
+    for(let yy=y0; yy<y0+rows; yy++){
+      for(let bx=0; bx<bytesPerRow; bx++){
+        let byte=0;
+        for(let bit=0; bit<8; bit++){
+          const x = bx*8+bit;
+          const i = (yy*Wd+x)*4;
+          const lum = 0.299*img[i]+0.587*img[i+1]+0.114*img[i+2];
+          if(lum<160) byte |= (0x80>>bit);
+        }
+        out.push(byte);
+      }
+    }
+  }
+  out.push(0x0A,0x0A,0x0A,0x0A);
+  return new Uint8Array(out);
+}
+
+/* ================= Web Bluetooth 打印 ================= */
+const BLE_SERVICES = [
+  '000018f0-0000-1000-8000-00805f9b34fb',
+  '0000ff00-0000-1000-8000-00805f9b34fb',
+  '0000ffe0-0000-1000-8000-00805f9b34fb',
+  '0000ffe5-0000-1000-8000-00805f9b34fb',
+  '0000fff0-0000-1000-8000-00805f9b34fb',
+  '0000ffd0-0000-1000-8000-00805f9b34fb',
+  '0000ae30-0000-1000-8000-00805f9b34fb',
+  '0000abf0-0000-1000-8000-00805f9b34fb',
+  '0000fee7-0000-1000-8000-00805f9b34fb',
+  '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+  'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
+];
+const shortUuid = u => u.endsWith('-0000-1000-8000-00805f9b34fb') ? u.slice(4,8) : u;
+let bleDevice=null, printChar=null;
+
+function setPill(on, name){
+  const p = document.getElementById('printerPill');
+  p.classList.toggle('on', on);
+  p.textContent = on ? tt('pill_on') + (name||'OK') : tt('pill_off');
+  const btn = document.getElementById('btnConnect');
+  if(btn) btn.textContent = on ? tt('pr_reconnect') : tt('pr_connect');
+}
+async function connectPrinter(){
+  if(!navigator.bluetooth){
+    modal(tt('bt_failtitle'), tt('pr_nosupport'), [{label:tt('bt_ok'),cls:'gray'}]);
+    return;
+  }
+  try{
+    toast(tt('bt_searching'), 'info', 2000);
+    bleDevice = await navigator.bluetooth.requestDevice({acceptAllDevices:true, optionalServices:BLE_SERVICES});
+  }catch(e){
+    if(e.name!=='NotFoundError') toast(tt('bt_searchfail')+e.message, 'err', 4000);
+    return;
+  }
+  bleDevice.addEventListener('gattserverdisconnected', ()=>{ printChar=null; setPill(false); toast(tt('bt_disconnected'), 'warn'); });
+  let server=null, lastErr=null;
+  for(let i=1;i<=3;i++){
+    try{
+      toast(tt('bt_connecting',{x:i>1?tt('bt_retry',{x:i}):''}), 'info', 1500);
+      server = await bleDevice.gatt.connect();
+      break;
+    }catch(e){
+      lastErr=e;
+      try{ bleDevice.gatt.disconnect(); }catch(_){ }
+      await new Promise(r=>setTimeout(r,800));
+    }
+  }
+  if(!server){
+    modal(tt('bt_failtitle'), tt('bt_failbody',{e:esc(lastErr&&lastErr.message||'?')}), [{label:tt('bt_ok'),cls:'gray'}]);
+    return;
+  }
+  printChar = null;
+  const diag = [];
+  let services = [];
+  try{ services = await server.getPrimaryServices(); }catch(e){ }
+  if(!services || !services.length){
+    services = [];
+    for(const su of BLE_SERVICES){
+      try{ services.push(await server.getPrimaryService(su)); }catch(e){ }
+    }
+  }
+  const candidates = [];
+  for(const svc of services){
+    try{
+      const chars = await svc.getCharacteristics();
+      for(const ch of chars){
+        const props = Object.keys(ch.properties).filter(k=>ch.properties[k]);
+        diag.push(`${shortUuid(svc.uuid)} / ${shortUuid(ch.uuid)} [${props.join(',')}]`);
+        if(ch.properties.writeWithoutResponse || ch.properties.write) candidates.push(ch);
+      }
+    }catch(e){ diag.push(`${shortUuid(svc.uuid)} / ?`); }
+  }
+  printChar = candidates.find(c=>c.properties.writeWithoutResponse) || candidates[0] || null;
+  if(!printChar){
+    const report = `Device:${bleDevice.name||'?'}\nServices:\n${diag.join('\n')||'(none)'}`;
+    modal(tt('bt_nochan_title'), `${tt('bt_nochan_body')}
+      <div class="ret-list" style="background:#f8fafc;border-color:var(--line);font-size:12px;word-break:break-all">${esc(report).replace(/\n/g,'<br>')}</div>`,
+      [
+        {label:tt('bt_copydiag'), cls:'ghost', keep:true, fn:()=>{ navigator.clipboard.writeText(report).then(()=>toast(tt('t_diagcopied'),'ok',1500)).catch(()=>{}); }},
+        {label:tt('bt_close'), cls:'gray'},
+      ]);
+    return;
+  }
+  setPill(true, bleDevice.name);
+  toast(tt('bt_connected',{n:bleDevice.name||tt('bt_unknown')}), 'ok', 3200, true);
+}
+async function bleWrite(data){
+  if(!printChar) throw new Error(tt('bt_gofirst'));
+  const CHUNK = 100;
+  for(let i=0;i<data.length;i+=CHUNK){
+    const part = data.slice(i, i+CHUNK);
+    if(printChar.properties.writeWithoutResponse && printChar.writeValueWithoutResponse){
+      await printChar.writeValueWithoutResponse(part);
+    }else{
+      await printChar.writeValue(part);
+    }
+    await new Promise(r=>setTimeout(r,18));
+  }
+}
+async function printOrder(order){
+  const data = state.settings.pmode==='img' ? buildImgReceipt(order) : buildTextReceipt(order);
+  toast(tt('t_printing'), 'info', 1600);
+  await bleWrite(data);
+}
+function printOrderById(oid){
+  const o = state.orders.find(x=>x.id===oid); if(!o) return;
+  if(!printChar){ toast(tt('bt_gofirst'), 'warn', 2600); switchTab('set'); return; }
+  printOrder(o).then(()=>toast(tt('t_printsent'), 'ok', 1600)).catch(e=>toast(tt('t_printfail')+e.message, 'err', 4000));
+}
+function testPrint(){
+  if(!printChar){ connectPrinter(); return; }
+  const demo = {no:tt('r_testno'), ts:Date.now(), total:3000, status:'done',
+    pay:{m:'cash', recv:5000, chg:2000},
+    items:[{pid:'x', name:tt('r_testname'), price:1500, qty:2}]};
+  printOrder(demo).then(()=>toast(tt('t_testsent'), 'ok', 3000))
+    .catch(e=>toast(tt('t_printfail')+e.message+tt('t_tryimg'), 'err', 4500));
+}
+
+/* ================= 启动 ================= */
+if('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost')){
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
+load();
+applyLang();
+if(!navigator.bluetooth){
+  document.getElementById('bleHint').innerHTML = tt('pr_nosupport');
+}
+</script>
+</body>
+</html>
