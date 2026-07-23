@@ -325,6 +325,13 @@ table.rank th{color:var(--sub);font-size:12px;font-weight:600}
             </select>
           </div>
         </div>
+        <div class="fld" style="margin:0 0 10px">
+          <label data-i18n="pr_copies">每单打印份数</label>
+          <select id="setCopies" onchange="saveSettings()">
+            <option value="1" data-i18n="pr_c1">1 张</option>
+            <option value="2" data-i18n="pr_c2">2 张（客人 + 拿货各一张）</option>
+          </select>
+        </div>
         <p class="hint" id="bleHint" data-i18n="pr_hint">iPhone 请用 App Store 的免费浏览器 <b>Bluefy</b> 打开本页面即可连接蓝牙打印；安卓用 Chrome 直接可用。小票乱码时请把打印方式切换为「图片」。</p>
       </div>
 
@@ -457,6 +464,7 @@ zh:{
   rk_p:'商品', rk_s:'已售', rk_l:'余量', rk_a:'金额', rk_empty:'今天还没有销售记录', pm_old:'未记录',
   pr_title:'🖨 小票打印机', pr_connect:'连接蓝牙打印机', pr_reconnect:'重新连接打印机', pr_test:'测试打印',
   pr_paper:'纸宽', pr_mode:'打印方式', pr_mode_t:'文本（快）', pr_mode_i:'图片（兼容）', pr_auto:'收款后自动打印',
+  pr_copies:'每单打印份数', pr_c1:'1 张', pr_c2:'2 张（客人 + 拿货各一张）',
   opt_off:'关闭', opt_on:'开启',
   pr_hint:'iPhone 请用 App Store 的免费浏览器 <b>Bluefy</b> 打开本页面即可连接蓝牙打印；安卓用 Chrome 直接可用。小票乱码或日文字形不对时，请把打印方式切换为「图片」。',
   pr_nosupport:'⚠️ 当前浏览器不支持网页蓝牙。iPhone 请到 App Store 下载免费浏览器 <b>Bluefy</b> 打开本页面；安卓请用 Chrome。收银记账功能不受影响。',
@@ -541,6 +549,7 @@ ja:{
   rk_p:'商品', rk_s:'販売', rk_l:'残', rk_a:'金額', rk_empty:'本日の販売はまだありません', pm_old:'未記録',
   pr_title:'🖨 レシートプリンター', pr_connect:'Bluetoothプリンター接続', pr_reconnect:'プリンター再接続', pr_test:'テスト印刷',
   pr_paper:'用紙幅', pr_mode:'印刷方式', pr_mode_t:'テキスト（速い）', pr_mode_i:'画像（互換）', pr_auto:'会計後に自動印刷',
+  pr_copies:'印刷部数', pr_c1:'1 部', pr_c2:'2 部（お客様＋ピッキング用）',
   opt_off:'オフ', opt_on:'オン',
   pr_hint:'iPhoneはApp Storeの無料ブラウザ<b>Bluefy</b>でこのページを開くとBluetooth印刷が使えます。Androidは Chrome でOK。文字化けや字形がおかしい時は印刷方式を「画像」に切り替えてください。',
   pr_nosupport:'⚠️ このブラウザはWeb Bluetoothに対応していません。iPhoneはApp Storeで<b>Bluefy</b>を入手してこのページを開いてください。レジ・記録機能はそのまま使えます。',
@@ -590,7 +599,7 @@ const LS_KEY = 'expo_pos_v1';
 let state = {
   products: [],           // {id,name,price,cap,stock,warn}
   orders: [],             // {id,no,ts,items,total,status,pay:{m,recv,chg}}
-  settings: {shop:'', foot:'', paper:'80', pmode:'text', auto:'0', lastPay:'cash', lang:'zh'},
+  settings: {shop:'', foot:'', paper:'80', pmode:'text', auto:'0', copies:'1', lastPay:'cash', lang:'zh'},
   seq: {date:'', n:0},
 };
 let cart = new Map();     // pid -> qty
@@ -1113,6 +1122,7 @@ function renderStats(){
   document.getElementById('setPaper').value = state.settings.paper;
   document.getElementById('setPmode').value = state.settings.pmode;
   document.getElementById('setAuto').value = state.settings.auto;
+  document.getElementById('setCopies').value = state.settings.copies||'1';
 }
 function saveSettings(){
   state.settings.shop = document.getElementById('setShop').value.trim()||tt('def_shop');
@@ -1120,6 +1130,7 @@ function saveSettings(){
   state.settings.paper = document.getElementById('setPaper').value;
   state.settings.pmode = document.getElementById('setPmode').value;
   state.settings.auto = document.getElementById('setAuto').value;
+  state.settings.copies = document.getElementById('setCopies').value;
   save();
 }
 function csvDownload(name, rows){
@@ -1440,6 +1451,10 @@ async function printOrder(order){
   const data = state.settings.pmode==='img' ? buildImgReceipt(order) : buildTextReceipt(order);
   toast(tt('t_printing'), 'info', 1600);
   await bleWrite(data);
+  if(state.settings.copies==='2'){
+    await new Promise(r=>setTimeout(r,400));
+    await bleWrite(data);
+  }
 }
 function printOrderById(oid){
   const o = state.orders.find(x=>x.id===oid); if(!o) return;
