@@ -1,6 +1,6 @@
-const CACHE = 'expo-pos-v1';
+const CACHE = 'expo-pos-v2';
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./', './index.html'])));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./', './index.html', './picker.html'])));
   self.skipWaiting();
 });
 self.addEventListener('activate', e => {
@@ -8,8 +8,10 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 // 网络优先、失败回退缓存：有网时自动拿最新版，没网时用上次缓存
+// 仅处理本站文件；云端 API（Supabase 等跨域请求）直连，绝不缓存
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  if (new URL(e.request.url).origin !== self.location.origin) return;
   e.respondWith(
     fetch(e.request).then(r => {
       const cp = r.clone();

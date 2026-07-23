@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>拿货屏</title>
+<style>
+:root{
+  --bg:#f4f5f7; --card:#fff; --ink:#1a1d24; --sub:#6b7280;
+  --brand:#2563eb; --ok:#16a34a; --err:#dc2626; --line:#e5e7eb;
+  --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:-apple-system,"PingFang SC","Hiragino Sans","Microsoft YaHei",sans-serif;
+  background:var(--bg); color:var(--ink); touch-action:manipulation; overscroll-behavior:none;
+}
+button{font-family:inherit;border:none;background:none;cursor:pointer;font-size:inherit;color:inherit}
+
+header{
+  position:sticky;top:0;z-index:10;background:var(--card);border-bottom:1px solid var(--line);
+  padding:calc(12px + var(--safe-t)) 18px 12px;display:flex;align-items:center;gap:12px;
+}
+header h1{font-size:20px;font-weight:800;flex:1}
+#connDot{width:12px;height:12px;border-radius:50%;background:#cbd5e1}
+#connDot.on{background:var(--ok)} #connDot.err{background:var(--err)}
+#doneCnt{font-size:14px;color:var(--sub);font-weight:700}
+#langBtn{font-size:13px;padding:6px 12px;border-radius:999px;font-weight:700;background:#eef2ff;color:var(--brand)}
+
+#offBanner{
+  display:none;background:#fef2f2;color:#b91c1c;font-weight:700;font-size:14px;
+  padding:10px 18px;border-bottom:1px solid #fecaca;
+}
+#offBanner.show{display:block}
+
+main{padding:16px 16px calc(30px + var(--safe-b))}
+#queue{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.oc{
+  background:var(--card);border-radius:16px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);
+  border-left:6px solid var(--brand);display:flex;flex-direction:column;gap:10px;
+  animation:pop .3s ease;
+}
+@keyframes pop{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+.oc.cxl{border-left-color:var(--err);background:#fff5f5}
+.oc .hd{display:flex;justify-content:space-between;align-items:center}
+.oc .no{font-size:24px;font-weight:800}
+.oc .tm{font-size:14px;color:var(--sub);font-weight:600}
+.oc .cxl-tag{font-size:14px;font-weight:800;color:var(--err)}
+.oc ul{list-style:none;display:flex;flex-direction:column;gap:6px}
+.oc li{
+  display:flex;justify-content:space-between;align-items:center;gap:10px;
+  font-size:19px;font-weight:700;line-height:1.4;
+  padding:8px 10px;background:#f8fafc;border-radius:10px;
+}
+.oc.cxl li{background:#fee2e2;text-decoration:line-through;color:#991b1b}
+.oc li .q{font-size:22px;font-weight:800;color:var(--brand);white-space:nowrap}
+.oc.cxl li .q{color:#991b1b}
+.oc .ft{display:flex;justify-content:space-between;align-items:center;margin-top:2px}
+.oc .amt{font-size:15px;color:var(--sub);font-weight:700}
+.oc .go{
+  background:var(--ok);color:#fff;font-size:17px;font-weight:800;
+  padding:12px 22px;border-radius:12px;
+}
+.oc .go:active{opacity:.75}
+.oc.cxl .go{background:#64748b}
+#empty{
+  text-align:center;color:var(--sub);padding:80px 20px;font-size:17px;line-height:2;
+}
+#empty .big{font-size:56px}
+
+#startMask{
+  position:fixed;inset:0;background:var(--bg);z-index:50;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:30px;
+}
+#startMask h2{font-size:26px;font-weight:800}
+#startMask p{color:var(--sub);font-size:15px;text-align:center;line-height:1.8}
+#startBtn{
+  background:var(--brand);color:#fff;font-size:20px;font-weight:800;
+  padding:18px 52px;border-radius:16px;box-shadow:0 6px 20px rgba(37,99,235,.35);
+}
+</style>
+</head>
+<body>
+<div id="startMask">
+  <h2 id="smTitle">📦 拿货屏</h2>
+  <p id="smDesc">收银台确认的订单会自动显示在这里。<br>请保持本页面常开、iPad 接通电源、连接网络。</p>
+  <button id="startBtn" onclick="start()">开始工作</button>
+</div>
+
+<header>
+  <span id="connDot"></span>
+  <h1 id="hTitle">拿货队列</h1>
+  <span id="doneCnt"></span>
+  <button id="langBtn" onclick="toggleLang()">🌐 日本語</button>
+</header>
+<div id="offBanner"></div>
+<main>
+  <div id="queue"></div>
+  <div id="empty" style="display:none"><div class="big">☕</div><span id="emptyTxt">暂无待出货订单</span></div>
+</main>
+
+<script>
+'use strict';
+const SUPA_URL = 'https://xbfrbakzbwtuamxbjqhr.supabase.co';
+const SUPA_KEY = 'sb_publishable_7goQ3oygEKniLdFssJIkaw_Mn6-QBj5';
+
+const I18N = {
+zh:{ title:'拿货队列', smTitle:'📦 拿货屏', smDesc:'收银台确认的订单会自动显示在这里。<br>请保持本页面常开、iPad 接通电源、连接网络。',
+  start:'开始工作', done:'✔ 出货完成', gotit:'知道了', cxl:'⚠️ 已取消 — 不要出货', doneCnt:'今日已出 {n} 单',
+  empty:'暂无待出货订单', off:'📴 网络中断，正在重连…（收银不受影响，恢复后订单会补上来）', langBtn:'🌐 日本語' },
+ja:{ title:'ピッキング', smTitle:'📦 ピッキング画面', smDesc:'レジで確定した注文がここに自動表示されます。<br>この画面を開いたまま、電源とネットに接続してください。',
+  start:'開始', done:'✔ 出荷完了', gotit:'OK', cxl:'⚠️ キャンセル — 出荷しないでください', doneCnt:'本日 {n} 件出荷',
+  empty:'待機中の注文はありません', off:'📴 接続が切れました。再接続中…', langBtn:'🌐 中文' },
+};
+let lang = localStorage.getItem('picker_lang') || 'zh';
+const tt = (k,v) => { let s = I18N[lang][k]; if(v) for(const x in v) s = s.split('{'+x+'}').join(v[x]); return s; };
+function toggleLang(){ lang = lang==='zh'?'ja':'zh'; localStorage.setItem('picker_lang', lang); applyLang(); render(); }
+function applyLang(){
+  document.documentElement.lang = lang==='ja'?'ja':'zh-CN';
+  document.getElementById('hTitle').textContent = tt('title');
+  document.getElementById('smTitle').innerHTML = tt('smTitle');
+  document.getElementById('smDesc').innerHTML = tt('smDesc');
+  document.getElementById('startBtn').textContent = tt('start');
+  document.getElementById('emptyTxt').textContent = tt('empty');
+  document.getElementById('offBanner').textContent = tt('off');
+  document.getElementById('langBtn').textContent = tt('langBtn');
+}
+
+let rows = [];              // 当前未处理订单（含取消提醒）
+let doneToday = 0;
+let knownIds = new Set();   // 已见过的订单，用于新单提示音
+let firstPoll = true;
+let audioCtx = null;
+
+function dayStartTs(){ const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); }
+
+async function poll(){
+  try{
+    const url = `${SUPA_URL}/rest/v1/orders?picked=eq.false&ts=gte.${dayStartTs()}&order=ts.asc&select=id,no,ts,items,total,status`;
+    const res = await fetch(url, {headers:{apikey:SUPA_KEY}});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    rows = await res.json();
+    // 今日已出货数量
+    const res2 = await fetch(`${SUPA_URL}/rest/v1/orders?picked=eq.true&status=eq.done&ts=gte.${dayStartTs()}&select=id`, {headers:{apikey:SUPA_KEY}});
+    if(res2.ok) doneToday = (await res2.json()).length;
+    setConn(true);
+    // 新单提示音
+    if(!firstPoll){
+      for(const r of rows){
+        if(!knownIds.has(r.id)){ beep(r.status==='cancelled'); break; }
+      }
+    }
+    rows.forEach(r=>knownIds.add(r.id));
+    firstPoll = false;
+    render();
+  }catch(e){ setConn(false); }
+}
+function setConn(ok){
+  const dot = document.getElementById('connDot');
+  dot.className = ok ? 'on' : 'err';
+  document.getElementById('offBanner').classList.toggle('show', !ok);
+}
+async function markPicked(id){
+  const card = document.getElementById('oc-'+id);
+  if(card){ card.style.opacity='.35'; card.style.pointerEvents='none'; }
+  try{
+    const res = await fetch(`${SUPA_URL}/rest/v1/orders?id=eq.${encodeURIComponent(id)}`, {
+      method:'PATCH', headers:{apikey:SUPA_KEY,'Content-Type':'application/json'},
+      body:'{"picked":true}',
+    });
+    if(!res.ok) throw new Error();
+    rows = rows.filter(r=>r.id!==id);
+    render();
+    poll();
+  }catch(e){
+    if(card){ card.style.opacity='1'; card.style.pointerEvents='auto'; }
+    setConn(false);
+  }
+}
+function timeStr(ts){ const d = new Date(ts); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function render(){
+  const q = document.getElementById('queue');
+  document.getElementById('doneCnt').textContent = tt('doneCnt',{n:doneToday});
+  document.getElementById('empty').style.display = rows.length ? 'none' : 'block';
+  q.innerHTML = rows.map(r=>{
+    const cxl = r.status==='cancelled';
+    return `<div class="oc ${cxl?'cxl':''}" id="oc-${esc(r.id)}">
+      <div class="hd">
+        <span class="no">${esc(r.no)}</span>
+        ${cxl?`<span class="cxl-tag">${tt('cxl')}</span>`:`<span class="tm">${timeStr(r.ts)}</span>`}
+      </div>
+      <ul>${(r.items||[]).map(it=>`<li><span>${esc(it.n)}</span><span class="q">× ${it.q}</span></li>`).join('')}</ul>
+      <div class="ft">
+        <span class="amt">¥${Math.round(r.total).toLocaleString('ja-JP')}</span>
+        <button class="go" onclick="markPicked('${esc(r.id)}')">${cxl?tt('gotit'):tt('done')}</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function beep(isCancel){
+  try{
+    if(!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+    const freqs = isCancel ? [440,330] : [880,1320];
+    freqs.forEach((f,i)=>{
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination);
+      o.frequency.value = f; o.type='sine';
+      g.gain.setValueAtTime(0.001, t0+i*0.18);
+      g.gain.exponentialRampToValueAtTime(0.35, t0+i*0.18+0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, t0+i*0.18+0.16);
+      o.start(t0+i*0.18); o.stop(t0+i*0.18+0.18);
+    });
+  }catch(e){}
+}
+
+let wakeLock = null;
+async function keepAwake(){
+  try{
+    if('wakeLock' in navigator){
+      wakeLock = await navigator.wakeLock.request('screen');
+      document.addEventListener('visibilitychange', async ()=>{
+        if(document.visibilityState==='visible' && wakeLock !== null){
+          try{ wakeLock = await navigator.wakeLock.request('screen'); }catch(e){}
+        }
+      });
+    }
+  }catch(e){}
+}
+
+function start(){
+  try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+  keepAwake();
+  document.getElementById('startMask').style.display='none';
+  poll();
+  setInterval(poll, 3000);
+}
+applyLang();
+</script>
+</body>
+</html>
