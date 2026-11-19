@@ -344,6 +344,7 @@ table.rank th{color:var(--sub);font-size:12px;font-weight:600}
       <div class="sec-title" data-i18n="cs_title">☁️ 拿货屏同步</div>
       <div class="card">
         <p id="syncStatus" class="hint" style="font-weight:700;margin-bottom:8px"></p>
+        <div class="fld"><label data-i18n="cs_key">同步口令（与拿货屏填同一个）</label><input id="setSyncKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" onchange="saveSyncKey()"></div>
         <p class="hint" data-i18n="cs_hint">第二台 iPad 用浏览器打开下面的地址，收银确认的订单会自动出现在上面（两台设备都需联网）：</p>
         <p class="hint" style="user-select:all;-webkit-user-select:all;word-break:break-all;background:#f1f5f9;border-radius:8px;padding:8px 10px;margin-top:6px">https://takeone51office.github.io/expo-pos/picker.html</p>
       </div>
@@ -482,6 +483,8 @@ zh:{
   cs_hint:'第二台 iPad 用浏览器打开下面的地址，收银确认的订单会自动出现在上面（两台设备都需联网）：',
   cs_pending:'待传 {n} 单，正在重试…', cs_off:'离线中，{n} 单待传，恢复网络后自动补传',
   cs_ok:'已全部同步（{t}）', cs_none:'开单后订单会自动同步到拿货屏',
+  cs_key:'同步口令（与拿货屏填同一个）', cs_nokey:'未设置同步口令，订单不会同步到拿货屏（已暂存 {n} 单）',
+  cs_badkey:'同步口令不对，请检查后重新输入（已暂存 {n} 单）',
   ex_title:'📤 数据导出', ex_orders:'订单明细 CSV', ex_inv:'库存汇总 CSV', ex_copy:'复制文字版收摊汇总', ex_bak:'完整备份 JSON（全部商品+订单）',
   ex_fb:'这个浏览器不能直接存文件。点「复制全部」，粘贴到微信/备忘录发出去即可（CSV 可直接贴进 Excel）。', ex_fbcopy:'复制全部',
   t_csv:'已生成文件（若浏览器未下载，请用「复制文字版」代替）', t_copied:'汇总已复制，可粘贴到微信/备忘录',
@@ -491,7 +494,7 @@ zh:{
   co_title:'清空全部订单？', co_body:'将删除 {n} 条订单记录（<b>不会</b>改变当前库存余量）。建议先导出 CSV 再清空。',
   co_yes:'清空', t_cleared:'订单已清空',
   fr_title:'恢复出厂？', fr_body:'将删除<b>所有商品、订单和设置</b>，无法恢复！', fr_yes:'全部删除',
-  ver:'展会收银台 v1.2 · 离线可用',
+  ver:'展会收银台 v1.4 · 离线可用',
   // 小票
   r_no:'单号', r_time:'时间', r_cxl:'（已取消）', r_cnt:'共 {n} 件', r_total:'合计', r_pm:'支付方式', r_recv:'实收', r_chg:'找零',
   r_testname:'测试商品-中文OK', r_testno:'#测试',
@@ -572,6 +575,8 @@ ja:{
   cs_hint:'2台目のiPadのブラウザで下記URLを開くと、確定した注文が自動表示されます（両方ネット接続が必要）：',
   cs_pending:'未送信 {n} 件、再試行中…', cs_off:'オフライン：{n} 件は接続回復後に自動送信',
   cs_ok:'すべて同期済み（{t}）', cs_none:'注文を確定するとピッキング画面に自動同期されます',
+  cs_key:'同期パスワード（ピッキング画面と同じもの）', cs_nokey:'同期パスワード未設定のため送信されません（保留 {n} 件）',
+  cs_badkey:'同期パスワードが違います。入力し直してください（保留 {n} 件）',
   ex_title:'📤 データ出力', ex_orders:'注文明細 CSV', ex_inv:'在庫 CSV', ex_copy:'テキスト集計をコピー', ex_bak:'完全バックアップ JSON',
   ex_fb:'このブラウザではファイル保存ができません。「すべてコピー」してメモ/チャットに貼り付けてください。', ex_fbcopy:'すべてコピー',
   t_csv:'ファイルを生成しました（ダウンロードされない場合は「テキスト集計」をご利用ください）', t_copied:'集計をコピーしました',
@@ -581,7 +586,7 @@ ja:{
   co_title:'全注文を削除しますか？', co_body:'{n} 件の注文記録を削除します（現在の在庫数は<b>変わりません</b>）。先にCSV出力をおすすめします。',
   co_yes:'削除', t_cleared:'注文を削除しました',
   fr_title:'初期化しますか？', fr_body:'<b>すべての商品・注文・設定</b>が削除されます。元に戻せません！', fr_yes:'全て削除',
-  ver:'イベントレジ v1.2 · オフライン対応',
+  ver:'イベントレジ v1.4 · オフライン対応',
   r_no:'No.', r_time:'日時', r_cxl:'（キャンセル）', r_cnt:'計 {n} 点', r_total:'合計', r_pm:'お支払い', r_recv:'お預かり', r_chg:'お釣り',
   r_testname:'テスト商品', r_testno:'#TEST',
   bt_searching:'Bluetoothプリンターを検索中…', bt_connecting:'接続中{x}…', bt_retry:'（{x}回目）',
@@ -1144,7 +1149,14 @@ function renderStats(){
   document.getElementById('setPmode').value = state.settings.pmode;
   document.getElementById('setAuto').value = state.settings.auto;
   document.getElementById('setCopies').value = state.settings.copies||'1';
+  document.getElementById('setSyncKey').value = state.settings.syncKey||'';
   updateSyncUI();
+}
+function saveSyncKey(){
+  state.settings.syncKey = document.getElementById('setSyncKey').value.trim();
+  syncAuthBad = false;
+  save();
+  syncNow();
 }
 function saveSettings(){
   state.settings.shop = document.getElementById('setShop').value.trim()||tt('def_shop');
@@ -1191,7 +1203,8 @@ function showTextFallback(name, text){
   ]);
 }
 function exportBackup(){
-  const data = {app:'expo-pos', exported:new Date().toISOString(), products:state.products, orders:state.orders, settings:state.settings, seq:state.seq};
+  const {syncKey, ...settings} = state.settings;   // 备份可能会发到微信等处：不带同步口令
+  const data = {app:'expo-pos', exported:new Date().toISOString(), products:state.products, orders:state.orders, settings, seq:state.seq};
   saveFile(`expo-pos_backup_${todayStr()}.json`, JSON.stringify(data, null, 1), 'application/json');
 }
 function exportCSV(kind){
@@ -1252,9 +1265,12 @@ function factoryReset(){
   ]);
 }
 
-/* ================= 云同步（拿货屏） ================= */
-const SUPA_URL = 'https://xbfrbakzbwtuamxbjqhr.supabase.co';
-const SUPA_KEY = 'sb_publishable_7goQ3oygEKniLdFssJIkaw_Mn6-QBj5';
+/* ================= 云同步（拿货屏）：Cloudflare Worker ================= */
+const API_URL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
+  ? 'http://127.0.0.1:8787'
+  : 'https://expo-pos-api.takeone51.workers.dev';
+let syncAuthBad = false;   // 口令错误时停止重试，等用户改口令
+function apiHeaders(){ return {'Content-Type':'application/json', 'X-Token': state.settings.syncKey||''}; }
 function qPush(item){
   state.syncQ = state.syncQ || [];
   state.syncQ.push(item);
@@ -1265,26 +1281,24 @@ let syncing = false;
 async function syncNow(){
   if(syncing){ return; }
   state.syncQ = state.syncQ || [];
-  if(!state.syncQ.length || !navigator.onLine){ updateSyncUI(); return; }
+  if(!state.syncQ.length || !navigator.onLine || !state.settings.syncKey || syncAuthBad){ updateSyncUI(); return; }
   syncing = true;
   try{
     while(state.syncQ.length){
       const it = state.syncQ[0];
       let res;
       if(it.op === 'ins'){
-        res = await fetch(`${SUPA_URL}/rest/v1/orders?on_conflict=id`, {
-          method:'POST',
-          headers:{apikey:SUPA_KEY, 'Content-Type':'application/json', Prefer:'resolution=ignore-duplicates'},
-          body: JSON.stringify(it.row),
+        res = await fetch(`${API_URL}/orders`, {
+          method:'POST', headers:apiHeaders(), body: JSON.stringify(it.row),
         });
       }else{
-        res = await fetch(`${SUPA_URL}/rest/v1/orders?id=eq.${encodeURIComponent(it.id)}`, {
-          method:'PATCH',
-          headers:{apikey:SUPA_KEY, 'Content-Type':'application/json'},
-          body: JSON.stringify({status:'cancelled'}),
+        res = await fetch(`${API_URL}/orders/${encodeURIComponent(it.id)}`, {
+          method:'PATCH', headers:apiHeaders(), body: JSON.stringify({status:'cancelled'}),
         });
       }
-      if(!res.ok && res.status !== 409) throw new Error('HTTP '+res.status);
+      if(res.status === 401){ syncAuthBad = true; throw new Error('auth'); }
+      if(res.status === 400){ console.warn('sync: bad item dropped', it); }   // 数据格式不对的单不卡住整个队列
+      else if(!res.ok) throw new Error('HTTP '+res.status);
       state.syncQ.shift();
       state.lastSync = Date.now();
       save();
@@ -1304,7 +1318,11 @@ function updateSyncUI(){
   const el = document.getElementById('syncStatus');
   if(!el) return;
   const n = (state.syncQ||[]).length;
-  if(n>0){
+  if(!state.settings.syncKey){
+    el.innerHTML = `🔑 ${tt('cs_nokey',{n})}`;
+  }else if(syncAuthBad){
+    el.innerHTML = `❌ ${tt('cs_badkey',{n})}`;
+  }else if(n>0){
     el.innerHTML = navigator.onLine
       ? `⏳ ${tt('cs_pending',{n})}`
       : `📴 ${tt('cs_off',{n})}`;

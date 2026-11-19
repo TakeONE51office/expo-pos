@@ -76,6 +76,10 @@ main{padding:16px 16px calc(30px + var(--safe-b))}
 }
 #startMask h2{font-size:26px;font-weight:800}
 #startMask p{color:var(--sub);font-size:15px;text-align:center;line-height:1.8}
+#keyInp{
+  width:min(360px,100%);font-size:18px;padding:14px 16px;border-radius:12px;
+  border:1px solid var(--line);background:var(--card);text-align:center;font-family:inherit;
+}
 #startBtn{
   background:var(--brand);color:#fff;font-size:20px;font-weight:800;
   padding:18px 52px;border-radius:16px;box-shadow:0 6px 20px rgba(37,99,235,.35);
@@ -86,6 +90,8 @@ main{padding:16px 16px calc(30px + var(--safe-b))}
 <div id="startMask">
   <h2 id="smTitle">📦 拿货屏</h2>
   <p id="smDesc">收银台确认的订单会自动显示在这里。<br>请保持本页面常开、iPad 接通电源、连接网络。</p>
+  <input id="keyInp" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <p id="keyErr" style="display:none;color:var(--err);font-weight:700"></p>
   <button id="startBtn" onclick="start()">开始工作</button>
 </div>
 
@@ -103,16 +109,21 @@ main{padding:16px 16px calc(30px + var(--safe-b))}
 
 <script>
 'use strict';
-const SUPA_URL = 'https://xbfrbakzbwtuamxbjqhr.supabase.co';
-const SUPA_KEY = 'sb_publishable_7goQ3oygEKniLdFssJIkaw_Mn6-QBj5';
+const API_URL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
+  ? 'http://127.0.0.1:8787'
+  : 'https://expo-pos-api.takeone51.workers.dev';
+let syncKey = localStorage.getItem('picker_key') || '';
+const apiHeaders = () => ({'Content-Type':'application/json', 'X-Token': syncKey});
 
 const I18N = {
 zh:{ title:'拿货队列', smTitle:'📦 拿货屏', smDesc:'收银台确认的订单会自动显示在这里。<br>请保持本页面常开、iPad 接通电源、连接网络。',
   start:'开始工作', done:'✔ 出货完成', gotit:'知道了', cxl:'⚠️ 已取消 — 不要出货', doneCnt:'今日已出 {n} 单',
-  empty:'暂无待出货订单', off:'📴 网络中断，正在重连…（收银不受影响，恢复后订单会补上来）', langBtn:'🌐 日本語' },
+  empty:'暂无待出货订单', off:'📴 网络中断，正在重连…（收银不受影响，恢复后订单会补上来）', langBtn:'🌐 日本語',
+  keyPh:'同步口令（与收银台相同）', keyEmpty:'请先输入同步口令', keyBad:'口令不对，请重新输入', keyChk:'正在检查…' },
 ja:{ title:'ピッキング', smTitle:'📦 ピッキング画面', smDesc:'レジで確定した注文がここに自動表示されます。<br>この画面を開いたまま、電源とネットに接続してください。',
   start:'開始', done:'✔ 出荷完了', gotit:'OK', cxl:'⚠️ キャンセル — 出荷しないでください', doneCnt:'本日 {n} 件出荷',
-  empty:'待機中の注文はありません', off:'📴 接続が切れました。再接続中…', langBtn:'🌐 中文' },
+  empty:'待機中の注文はありません', off:'📴 接続が切れました。再接続中…', langBtn:'🌐 中文',
+  keyPh:'同期パスワード（レジと同じ）', keyEmpty:'同期パスワードを入力してください', keyBad:'パスワードが違います', keyChk:'確認中…' },
 };
 let lang = localStorage.getItem('picker_lang') || 'zh';
 const tt = (k,v) => { let s = I18N[lang][k]; if(v) for(const x in v) s = s.split('{'+x+'}').join(v[x]); return s; };
@@ -126,6 +137,7 @@ function applyLang(){
   document.getElementById('emptyTxt').textContent = tt('empty');
   document.getElementById('offBanner').textContent = tt('off');
   document.getElementById('langBtn').textContent = tt('langBtn');
+  document.getElementById('keyInp').placeholder = tt('keyPh');
 }
 
 let rows = [];              // 当前未处理订单（含取消提醒）
@@ -136,15 +148,15 @@ let audioCtx = null;
 
 function dayStartTs(){ const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); }
 
+let pollTimer = null;
 async function poll(){
   try{
-    const url = `${SUPA_URL}/rest/v1/orders?picked=eq.false&ts=gte.${dayStartTs()}&order=ts.asc&select=id,no,ts,items,total,status`;
-    const res = await fetch(url, {headers:{apikey:SUPA_KEY}});
+    const res = await fetch(`${API_URL}/orders?since=${dayStartTs()}`, {headers:apiHeaders()});
+    if(res.status === 401){ authFailed(); return; }
     if(!res.ok) throw new Error('HTTP '+res.status);
-    rows = await res.json();
-    // 今日已出货数量
-    const res2 = await fetch(`${SUPA_URL}/rest/v1/orders?picked=eq.true&status=eq.done&ts=gte.${dayStartTs()}&select=id`, {headers:{apikey:SUPA_KEY}});
-    if(res2.ok) doneToday = (await res2.json()).length;
+    const data = await res.json();
+    rows = data.pending || [];
+    doneToday = data.done || 0;   // 今日已出货数量
     setConn(true);
     // 新单提示音
     if(!firstPoll){
@@ -166,10 +178,10 @@ async function markPicked(id){
   const card = document.getElementById('oc-'+id);
   if(card){ card.style.opacity='.35'; card.style.pointerEvents='none'; }
   try{
-    const res = await fetch(`${SUPA_URL}/rest/v1/orders?id=eq.${encodeURIComponent(id)}`, {
-      method:'PATCH', headers:{apikey:SUPA_KEY,'Content-Type':'application/json'},
-      body:'{"picked":true}',
+    const res = await fetch(`${API_URL}/orders/${encodeURIComponent(id)}`, {
+      method:'PATCH', headers:apiHeaders(), body:'{"picked":true}',
     });
+    if(res.status === 401){ authFailed(); return; }
     if(!res.ok) throw new Error();
     rows = rows.filter(r=>r.id!==id);
     render();
@@ -233,13 +245,34 @@ async function keepAwake(){
   }catch(e){}
 }
 
-function start(){
-  try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+function showKeyErr(msg){
+  const el = document.getElementById('keyErr');
+  el.textContent = msg; el.style.display = msg ? 'block' : 'none';
+}
+function authFailed(){
+  if(pollTimer){ clearInterval(pollTimer); pollTimer = null; }
+  document.getElementById('startMask').style.display='flex';
+  showKeyErr(tt('keyBad'));
+}
+async function start(){
+  const k = document.getElementById('keyInp').value.trim();
+  if(!k){ showKeyErr(tt('keyEmpty')); return; }
+  try{ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+  showKeyErr(tt('keyChk'));
+  syncKey = k;
+  try{
+    const res = await fetch(`${API_URL}/ping`, {headers:apiHeaders()});
+    if(res.status === 401){ showKeyErr(tt('keyBad')); return; }
+  }catch(e){ /* 没网也先进入，poll 会显示断网横幅 */ }
+  localStorage.setItem('picker_key', syncKey);
+  showKeyErr('');
   keepAwake();
   document.getElementById('startMask').style.display='none';
   poll();
-  setInterval(poll, 3000);
+  if(!pollTimer) pollTimer = setInterval(poll, 3000);
 }
+document.getElementById('keyInp').value = syncKey;
+document.getElementById('keyInp').addEventListener('keydown', e=>{ if(e.key==='Enter') start(); });
 applyLang();
 </script>
 </body>

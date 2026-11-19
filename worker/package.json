@@ -1,0 +1,17 @@
+{
+  "name": "expo-pos-api",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev --port 8787",
+    "db:init:local": "wrangler d1 execute expo-pos --local --file=schema.sql",
+    "db:init:remote": "wrangler d1 execute expo-pos --remote --file=schema.sql",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "workerd@1.20261118.1": true
+  }
+}

@@ -1,0 +1,14 @@
+name = "expo-pos-api"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+workers_dev = true      # https://expo-pos-api.takeone51.workers.dev
+preview_urls = false
+
+[[d1_databases]]
+binding = "DB"
+database_name = "expo-pos"
+database_id = "4a7c6ef8-d5b6-4903-b308-d30579712321"
+
+# 口令不写在这里（仓库是公开的）：
+#   线上：npx wrangler secret put TOKEN
+#   本地：worker/.dev.vars 里写 TOKEN=xxx（已 gitignore）

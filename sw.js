@@ -1,4 +1,4 @@
-const CACHE = 'expo-pos-v2';
+const CACHE = 'expo-pos-v3';
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./', './index.html', './picker.html'])));
   self.skipWaiting();
