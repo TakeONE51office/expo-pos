@@ -354,6 +354,7 @@ table.rank th{color:var(--sub);font-size:12px;font-weight:600}
           <button class="btn ghost" onclick="exportCSV('orders')" data-i18n="ex_orders">订单明细 CSV</button>
           <button class="btn ghost" onclick="exportCSV('inv')" data-i18n="ex_inv">库存汇总 CSV</button>
         </div>
+        <button class="btn ghost block" style="margin-bottom:10px" onclick="exportBackup()" data-i18n="ex_bak">完整备份 JSON（全部商品+订单）</button>
         <button class="btn gray block" onclick="copySummary()" data-i18n="ex_copy">复制文字版收摊汇总</button>
       </div>
 
@@ -481,7 +482,8 @@ zh:{
   cs_hint:'第二台 iPad 用浏览器打开下面的地址，收银确认的订单会自动出现在上面（两台设备都需联网）：',
   cs_pending:'待传 {n} 单，正在重试…', cs_off:'离线中，{n} 单待传，恢复网络后自动补传',
   cs_ok:'已全部同步（{t}）', cs_none:'开单后订单会自动同步到拿货屏',
-  ex_title:'📤 数据导出', ex_orders:'订单明细 CSV', ex_inv:'库存汇总 CSV', ex_copy:'复制文字版收摊汇总',
+  ex_title:'📤 数据导出', ex_orders:'订单明细 CSV', ex_inv:'库存汇总 CSV', ex_copy:'复制文字版收摊汇总', ex_bak:'完整备份 JSON（全部商品+订单）',
+  ex_fb:'这个浏览器不能直接存文件。点「复制全部」，粘贴到微信/备忘录发出去即可（CSV 可直接贴进 Excel）。', ex_fbcopy:'复制全部',
   t_csv:'已生成文件（若浏览器未下载，请用「复制文字版」代替）', t_copied:'汇总已复制，可粘贴到微信/备忘录',
   dm_title:'⚠️ 数据管理',
   dm_hint:'所有数据仅保存在本机浏览器中，请勿清除浏览器数据。新一场展会开始前可清空订单并补满库存。',
@@ -570,7 +572,8 @@ ja:{
   cs_hint:'2台目のiPadのブラウザで下記URLを開くと、確定した注文が自動表示されます（両方ネット接続が必要）：',
   cs_pending:'未送信 {n} 件、再試行中…', cs_off:'オフライン：{n} 件は接続回復後に自動送信',
   cs_ok:'すべて同期済み（{t}）', cs_none:'注文を確定するとピッキング画面に自動同期されます',
-  ex_title:'📤 データ出力', ex_orders:'注文明細 CSV', ex_inv:'在庫 CSV', ex_copy:'テキスト集計をコピー',
+  ex_title:'📤 データ出力', ex_orders:'注文明細 CSV', ex_inv:'在庫 CSV', ex_copy:'テキスト集計をコピー', ex_bak:'完全バックアップ JSON',
+  ex_fb:'このブラウザではファイル保存ができません。「すべてコピー」してメモ/チャットに貼り付けてください。', ex_fbcopy:'すべてコピー',
   t_csv:'ファイルを生成しました（ダウンロードされない場合は「テキスト集計」をご利用ください）', t_copied:'集計をコピーしました',
   dm_title:'⚠️ データ管理',
   dm_hint:'データはこの端末のブラウザ内のみに保存されます。ブラウザのデータ消去にご注意ください。新しいイベント前に注文をクリアして在庫を補充できます。',
@@ -1157,13 +1160,39 @@ function csvDownload(name, rows){
     c = String(c==null?'':c);
     return /[",\n]/.test(c) ? '"'+c.replace(/"/g,'""')+'"' : c;
   }).join(',')).join('\r\n');
-  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  saveFile(name, csv, 'text/csv');
+}
+// iPad/iPhone（Bluefy/Safari）不认 <a download>：触屏设备优先走系统分享（存到文件/AirDrop/微信），
+// 不支持或失败时弹出全文可复制；桌面照常下载
+function saveFile(name, text, mime){
+  const file = new File([text], name, {type: mime + ';charset=utf-8'});
+  const touch = navigator.maxTouchPoints > 0;
+  if(touch && navigator.canShare && navigator.canShare({files:[file]})){
+    navigator.share({files:[file], title:name}).catch(e=>{ if(e.name!=='AbortError') showTextFallback(name, text); });
+    return;
+  }
+  if(touch){ showTextFallback(name, text); return; }
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
+  a.href = URL.createObjectURL(file);
   a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
   toast(tt('t_csv'), 'info', 3000);
+}
+function showTextFallback(name, text){
+  text = text.replace(/^﻿/, '');
+  modal(name, `<p class="hint" style="margin-bottom:8px">${esc(tt('ex_fb'))}</p><textarea id="fbTxt" rows="12" style="width:100%;font-size:12px" readonly>${esc(text)}</textarea>`, [
+    {label:tt('bt_close'), cls:'gray'},
+    {label:tt('ex_fbcopy'), cls:'', keep:true, fn:()=>{
+      const ta = document.getElementById('fbTxt');
+      navigator.clipboard.writeText(text).then(()=>toast(tt('t_diagcopied'),'ok'))
+        .catch(()=>{ ta.focus(); ta.select(); ta.setSelectionRange(0, text.length); document.execCommand('copy'); toast(tt('t_diagcopied'),'ok'); });
+    }},
+  ]);
+}
+function exportBackup(){
+  const data = {app:'expo-pos', exported:new Date().toISOString(), products:state.products, orders:state.orders, settings:state.settings, seq:state.seq};
+  saveFile(`expo-pos_backup_${todayStr()}.json`, JSON.stringify(data, null, 1), 'application/json');
 }
 function exportCSV(kind){
   if(kind==='orders'){
